@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
-#    Felix Hamann
-#    369625
-#
 
 
 import geometry as gm
@@ -56,7 +52,7 @@ class Light(Body):
     """
     def __init__(self, p):
         geometry = gm.Point(p)
-        super().__init__(geometry)
+        super(Light, self).__init__(geometry)
 
     @property
     def lightness(self):
@@ -75,7 +71,7 @@ class Material(Body):
     """
 
     def __init__(self, geometry):
-        super().__init__(geometry)
+        super(Material, self).__init__(geometry)
 
     @property
     def shininess(self):
@@ -99,7 +95,7 @@ class Sphere(Material):
     def __init__(self, pos, radius):
         pos = gm.Point(pos)
         geometry = gm.Sphere(pos, radius)
-        super().__init__(geometry)
+        super(Sphere, self).__init__(geometry)
 
 
 class Plane(Material):
@@ -108,7 +104,7 @@ class Plane(Material):
         point = gm.Point(point)
         normal = gm.Vector(normal)
         geometry = gm.Plane(point, normal)
-        super().__init__(geometry)
+        super(Plane, self).__init__(geometry)
 
 
 class Triangle(Material):
@@ -116,7 +112,7 @@ class Triangle(Material):
     def __init__(self, *vertices):
         vertices = tuple(map(gm.Point, vertices))
         geometry = gm.Triangle(*vertices)
-        super().__init__(geometry)
+        super(Triangle, self).__init__(geometry)
 
 
 class CheckerboardTexture(object):

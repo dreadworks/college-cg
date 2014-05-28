@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
-#    Felix Hamann
-#    369625
-#
 
 
 import math
@@ -97,7 +93,7 @@ class Phong(object):
             # intensify the objects color
             # based on the lights components
             # instead of just adding up
-            lightc = obj.colorAt(point).combine(light.color/0xff, op.mul)
+            lightc = obj.colorAt(point).combine(light.color / 0xff, op.mul)
 
             # diffus
             cosphi = (normal * lightvec)
@@ -114,7 +110,7 @@ class Phong(object):
             factor = obj.shininess
             direction = -(ray.direction).mirror(normal)
             ray = gm.Ray(point, direction)
-            color += self.colorize(ray, d-1) * factor
+            color += self.colorize(ray, d - 1) * factor
 
         # refraction (TODO)
         # ...

@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
-#    Felix Hamann
-#    369625
-#
 
 
 import math
@@ -119,7 +115,7 @@ class Vector(Point):
         """
         return Vector(self._compwise(v.raw, op.sub))
 
-    def __truediv__(self, s):
+    def __div__(self, s):
         """
         Scales the vector.
 
@@ -165,7 +161,7 @@ class Vector(Point):
         return Vector(tuple(w))
 
     def __init__(self, v):
-        super().__init__(v)
+        super(Vector, self).__init__(v)
 
     @property
     def length(self):
@@ -210,7 +206,7 @@ class Vector(Point):
         """
         Function that combines two vectors component
         wise with an arbitrary function.
-        
+
         v  -- Another Vector instance
         fn -- Function that awaits two parameters
         """
@@ -368,7 +364,7 @@ class Sphere(Body):
     def intersection(self, ray):
         co = self.center - ray.origin
         f = co * ray.direction
-        disc = f**2 - co*co + self.radius**2
+        disc = f ** 2 - co * co + self.radius ** 2
         if disc >= 0:
             return f - math.sqrt(disc)
 
@@ -495,7 +491,7 @@ class Triangle(Body):
             self.a, self.b, self.c = t
 
         else:
-            msg = EMSG['setter'] % ("Triangle", type(tuple), type(c))
+            msg = EMSG['setter'] % ("Triangle", type(tuple), type(t))
             raise GeometryException(msg)
 
     def normal(self, p):
@@ -513,7 +509,7 @@ class Triangle(Body):
         r = (dv * w) / cosalpha
         s = (wu * ray.direction) / cosalpha
 
-        if 0 <= r and r <= 1 and 0 <= s and s <= 1 and r+s <= 1:
+        if 0 <= r and r <= 1 and 0 <= s and s <= 1 and r + s <= 1:
             return (wu * self.v) / cosalpha
 
     def clone(self):

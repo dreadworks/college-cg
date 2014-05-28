@@ -1,12 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
-#    Felix Hamann
-#    369625
-#
 
 
-import time
 import math
 import json
 
@@ -61,7 +56,7 @@ class Raytracer(object):
 
     def _instancecheck(self, name, instance, *bases):
         if not isinstance(instance, tuple(bases)):
-            self._throw('setter', name, str(base), str(instance))
+            self._throw('setter', name, str(bases), str(instance))
 
 
 class World(Raytracer):
@@ -172,7 +167,7 @@ class Camera(Raytracer):
         self.world = world
         self._res = res
 
-        alpha = fow/2.
+        alpha = fow / 2.
         self._height = 2 * math.tan(alpha)
 
         asprat = self.reswidth / float(self.resheight)
@@ -248,8 +243,8 @@ class Camera(Raytracer):
 
         for x in range(self.reswidth):
             for y in range(self.resheight):
-                xcmp = s * (x*pw - self.width/2)
-                ycmp = u * (y*ph - self.height/2)
+                xcmp = s * (x * pw - self.width / 2)
+                ycmp = u * (y * ph - self.height / 2)
                 yield x, y, gm.Ray(eye, f + xcmp + ycmp)
 
     def shoot(self, eye, up, img):
@@ -298,7 +293,7 @@ class Importer(object):
         cstr -- Valuestring of format [\da-fA-F]{6}
         """
         step = 2
-        l = [cstr[i:i+step] for i in range(0, len(cstr), 2)]
+        l = [cstr[i:i + step] for i in range(0, len(cstr), 2)]
         l = map(lambda s: int(s, 16), l)
         return tuple(l)
 
@@ -508,6 +503,10 @@ def main():
     VERBOSE = True
 
     import sys
+    if len(sys.argv) < 2:
+        print('Usage: raytracer.py file.json')
+        sys.exit(2)
+
     for img in raytrace(sys.argv[1]):
         img.show()
 
