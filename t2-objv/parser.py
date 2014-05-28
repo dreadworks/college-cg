@@ -91,7 +91,15 @@ class Obj(dict):
         raise ParserException('Unknown directive %s' % dtype)
 
     def _store(self, raw):
-        dtype, x, y, z = raw.split()
+
+        # TODO implement grouping (like s or g) -> search for 's off'
+
+        try:
+            dtype, x, y, z = raw.split()
+        except ValueError:
+            msg = 'Could not parse line "%s"' % raw
+            raise ParserException(msg)
+
         store = self.setdefault(dtype, [])
         data = self._map(dtype, (x, y, z))
         store.append(data)
@@ -107,6 +115,10 @@ class Obj(dict):
             map(self._store, lines)  # TODO error handling
             fmt = len(self.keys()), tuple(self.keys())
             log('read %d keys: %s' % fmt)
+
+    @property
+    def vertices(self):
+        return self['v']
 
     def faces(self):
         # yields ((vertex1, normal1), ...)
