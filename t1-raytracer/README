@@ -1,36 +1,24 @@
 
-		Raytracer
-		23.04.2014
+Raytracer
+=========
 
-		Der Raytracer läuft mit Python3. PIL befindet sich für Python3
-		im fork Pillow. Dies ist die einzige Abhängigkeit, die
-		eventuell nachinstalliert werden muss.
+Description
+-----------
 
-		In diesem Verzeichnis liegt die install.sh. Sie kümmert sich
-		automatisch um das (lokale) Befriedigen der Abhängigkeiten.
+This is a raytracer written in python to render
+arbitrary scenes. The scenes are defined as json files.
+The shading is based upon the Phong Reflection Model. 
 
-		Wenn virtualenv installiert ist, reicht ein ./install.sh.
-		Wenn pip installiert ist, reicht ebenfalls ein ./install.sh,
-		jedoch werden root-Rechte benötigt um virtualenv zu
-		installieren.
 
-		Ist beides nicht der Fall (wie zB als normaler Nutzer auf
-		linux001.intern.mi.hs-rm.de), so kann mithilfe von
+Usage:
+------
 
-		./install.sh --no-root
+./raytracer.py worlds/task.json
 
-		alles auch lokal, ohne root, installiert werden.
-		Getestet (script, unit-test und rendering) wurde
-		./install.sh --no-root auf:
-		        linux001.intern.mi.hs-rm.de (Ubuntu 3.8.0-31)
-				Xubuntu 3.11.0-13 i686
-				Debian 3.2.51-1 i686
 
-		(Problematisch sind nur die unterschiedlichen Paketquellen,
-		da die von Pillow benötigten Header-Dateien von python3-dev in
-		immer anderen Paketen auffindbar sind...)
 
-		Die virtuelle Umgebung kann folgendermaßen gestartet werden:
-		source .venv/bin/activate
+Dependencies:
+-------------
 
-		Felix Hamann, 369625
+* Python 2.7
+* PIL (or Pillow that incorporates the PIL)
