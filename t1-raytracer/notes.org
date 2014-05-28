@@ -1,0 +1,8 @@
+* Anmerkungen
+** Skalarprodukt von geometry.Vector instanzen:
+   Die Implementierung des Skalarprodukts laesst sich ueber die
+   interne __compwise Methode einigermassen elegant
+   implementieren. Jedoch wird dort ein Vektor gebaut, der eigentlich
+   gar nicht benoetigt wird. Eventuell ist der Compiler klug genug
+   das wegzuoptimieren. Falls nicht, muesste diese Stelle fuer
+   performanceintensive Anwendungen geaendert werden.

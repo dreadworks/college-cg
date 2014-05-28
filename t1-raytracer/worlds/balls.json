@@ -1,0 +1,54 @@
+{
+	"recdepth": 2,
+
+	"world": {
+		"center": [0, 3, -15],
+		"background": "000000",
+		"lightness": 0.4,
+		"maxdist": 100
+	},
+
+	"camera": {
+		"resolution": [480, 320],
+		"angleofview": 45
+	},
+
+	"pictures": [{
+		"eye": [5, 2, 0],
+		"up": [0, 1, 0],
+		"resolution": [480, 320]
+	}],
+
+	"bodies": [{
+		"type": "sphere",
+		"color": "0000ff",
+		"shininess": 0.2,
+		"smoothness": 1,
+
+		"position": [-2.5, 3, -10],
+		"radius": 2
+	},{
+		"type": "sphere",
+		"color": "ff0000",
+		"shininess": 0.5,
+		"smoothness": 5,
+
+		"position": [0, 3, -15],
+		"radius": 2
+	},{
+		"type": "sphere",
+		"color": "00ff00",
+		"shininess": 0.5,
+		"smoothness": 10,
+
+		"position": [3, 3, -20],
+		"radius": 2
+	}],
+
+	"lights": [{
+		"position": [30, 30, 10],
+		"color": "ffffff",
+		"lightness": 1
+	}]
+
+}

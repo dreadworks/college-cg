@@ -1,0 +1,72 @@
+{
+	"recdepth": 1,
+
+	"world": {
+		"maxdist": 100,
+		"background": "000000",
+		"center": [0, 3, 0],
+		"lightness": 0.2
+	},
+
+	"camera": {
+		"resolution": [400, 400],
+		"angleofview": 45
+	},
+
+	"pictures": [{
+		"eye": [0, 2, 5],
+		"up": [0, 1, 0]
+	}],
+
+	"bodies": [{
+		"type": "sphere",
+		"color": "0000ff",
+		"shininess": 0.5,
+		"smoothness": 5,
+
+		"position": [0, 7, -10],
+		"radius": 2
+	},{
+		"type": "sphere",
+		"color": "ff0000",
+		"shininess": 0.5,
+		"smoothness": 5,
+
+		"position": [2.5, 3, -10],
+		"radius": 2
+	},{
+		"type": "sphere",
+		"color": "00ff00",
+		"shininess": 0.5,
+		"smoothness": 5,
+
+		"position": [-2.5, 3, -10],
+		"radius": 2
+	},{
+		"type": "plane",
+		"shininess": 0.5,
+		"smoothness": 5,
+		"texture": {
+			"type": "checkerboard",
+			"size": 1,
+			"colors": ["efefef", "333333"]
+		},
+
+		"point": [0, 0, 0],
+		"norm": [0, 1, 0]
+	},{
+		"type": "triangle",
+		"color": "ffffff",
+		"shininess": 0.5,
+		"smoothness": 5,
+
+		"vertices": [[0, 7, -10], [2.5, 3, -10], [-2.5, 3, -10]]
+	}],
+
+	"lights": [{
+		"position": [-30, 30, 10],
+		"color": "ffffff",
+		"lightness": 1
+	}]
+
+}
