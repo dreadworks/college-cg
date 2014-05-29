@@ -3,9 +3,9 @@
 
 
 import numpy as np
+from OpenGL.arrays import vbo
 
 
-import parser
 from util import LOG
 log = LOG.out.info
 
@@ -25,48 +25,46 @@ calculate missing (geometrical) data.
 class Polyhedron(object):
 
     def __str__(self):
-        state = "Initialized" if hasattr(self, '_faces') else "Uninitialized"
-        return "%s Polyhedron" % state
+        return self._name
 
-    def __init__(self):
-        pass
-
-    def load(self, fname):
-        log("loading data from %s into Polyhedron" % fname)
-
-        obj = parser.Obj(fname)
-        faces = np.array([f for f in obj.faces()], 'f')
-        points = np.array(obj.vertices, 'f')
+    def __init__(self, obj):
+        log("loading data from %s into Polyhedron" % obj.name())
+        self._name = obj.name()
+        # faces = np.array([f for f in obj.faces()], 'f')
 
         # calculate raw object offset
         bbx = np.vstack((
-            points.max(axis=0),
-            points.min(axis=0)))
-        offset = (bbx[1] + bbx[0]) / -2
+            obj.vertices.max(axis=0),
+            obj.vertices.min(axis=0)))
+        offset = (bbx[1] + bbx[0]) / -2.
         log('calculated offset of %s' % offset)
 
         # calculate raw object scale
-        scale = 1 / abs((offset + bbx[1]).max())
+        scale = 1 / abs((offset + bbx[0]).max())
         scale = [scale for _ in range(3)]
         log('calculated scale of %s' % scale)
 
         # set properties
-        self._faces = faces
+        self._faces = obj.faces
         self._rawOffset = offset
         self._rawScale = scale
 
-        # self._normals = obj.normals()
+        # defaults
+        self._angle = 0
+        self._color = (1., 1., 1., 0.)
 
-        log("loaded %d faces and %d normals" % (
-            len(self.faces), 0))  # len(self.normals)))
+        log("loaded %d faces" % len(self.faces))
+
+    #
+    #   READ ONLY PROPERTIES
+    #
+    @property
+    def vbo(self):
+        return vbo.VBO(self.faces.flatten())
 
     @property
     def faces(self):
         return self._faces
-
-    @property
-    def normals(self):
-        return self._normals
 
     @property
     def rawScale(self):
@@ -75,3 +73,22 @@ class Polyhedron(object):
     @property
     def rawOffset(self):
         return self._rawOffset
+
+    #
+    #   CONFIGURABLE PROPERTIES
+    #
+    @property
+    def color(self):
+        return self._color
+
+    @color.setter
+    def color(self, color):
+        self._color = color
+
+    @property
+    def angle(self):
+        return self._angle
+
+    @angle.setter
+    def angle(self, value):
+        self._angle = value % 360
