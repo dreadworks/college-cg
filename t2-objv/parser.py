@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+
+import re
+import numpy as np
+
+
 from util import LOG
 log = LOG.out.info
 
@@ -35,94 +40,229 @@ class ParserException(Exception):
         self.msg = msg
 
 
-class Obj(dict):
+#
+#
+#
+#
+class ObjParser(object):
     """
-    The .obj parser is a pimped dictionary.
-    Parsing is executed at instantiation.
+    Currently supported:
+      v, vn, f, s, o
+
+    Ignored:
+      usemtl
+
     """
+    class Obj(object):
+        """
 
-    def _map(self, dtype, data):
-        # (Altered) Descriptions from http://paulbourke.net/dataformats/obj/
+        TODO docs
 
-        #   VERTICES
+        """
+        stats = {
+            'calculated normals': 0
+        }
+
+        def _parse(self, line):
+            dtype, data = re.split(r' ', line, maxsplit=1)
+            data = data.strip()
+
+            #
+            #   VERTICES
+            #
+            if dtype == 'v':
+                data = map(float, data.split())
+                self._vertices.append(np.array(data, 'f'))
+                return
+
+            #
+            #   NORMALS
+            #
+            if dtype == 'vn':
+                data = map(float, data.split())
+                self._normals.append(-np.array(data, 'f'))
+                return
+
+            #
+            #   FACES
+            #
+            # save indices of vertices and normals
+            # in self._vertices & self._normals
+            # and map the vertex to a set of points
+            # in self._v2vn
+            if dtype == 'f':
+                data = map(lambda s: s.split('/'), data.split())
+                vertices = map(lambda l: int(l[0]), data)
+                normals = []
+                normal = None  # cache
+
+                for i, pair in enumerate(data):
+                    if len(pair) == 3:
+                        index = int(pair[2])
+
+                    #
+                    #   calculate new surface normal
+                    #
+                    else:
+
+                        if normal is not None:
+                            index = len(self._normals) - 1
+
+                        else:
+                            self.stats['calculated normals'] += 1
+
+                            # retrieve point coordinates
+                            v = map(lambda j: self._vertices[j], vertices)
+
+                            # create normalized vectors spanning a plane
+                            vectors = (v[0] - v[1]), (v[0] - v[2])
+
+                            # the surface normal is the cross product
+                            # of the two vectors spanning the plane
+                            normal = np.cross(*vectors)
+                            normal = normal / np.linalg.norm(normal)
+
+                            index = len(self._normals)
+                            self._normals.append(-normal)
+
+                    # save normals index
+                    normals.append(index)
+                    vnstore = self._v2vn.setdefault(vertices[i], [])
+                    vnstore.append(index)
+
+                self._faces += zip(vertices, normals)
+                return
+
+            #
+            #   SMOOTHING GROUPS
+            #
+            if dtype == 's':
+                g = self._smoothing[-1]
+                facecount = len(self._faces)
+
+                if data == 'off':
+                    if len(g) == 1:
+                        self._smoothing[-1] += (facecount,)
+                    return
+
+                if data == 'on':
+                    if len(g) == 2:
+                        self._smoothing.append((facecount,))
+
+            #
+            #   IGNORE
+            #
+            if dtype == 'usemtl':
+                log('ignoring directive %s' % dtype)
+                return
+
+            #
+            #   NOT FOUND
+            #
+            msg = 'Could not map directive "%s"'
+            raise ParserException(msg % dtype)
+
+        def __init__(self, name, data):
+            self._name = name
+
+            # used for an efficient calculation
+            # of smoothed surfaces and to retrieve
+            # normals per vertex when serving faces
+            self._v2vn = {}
+
+            # enumerations in obj's begin
+            # with value 1 (for whatever reason...)
+            # hence the None element.
+            self._vertices = [None]   # [None, (x, y, z)₀, ...]
+            self._normals = [None]    # [None, (x, y, z)₀, ...]
+            self._smoothing = [(0,)]  # Ranges of faces where
+                                      # smoothing is activated
+            self._faces = []          # [(v₀, vn₀), (v₁, vn₁), ...],
+                                      # v and vn as indices of elements in
+                                      # self._vertices and self._normals
+
+            # split data line-wise and remove
+            # empty lines and comments
+            sanitize = lambda s: s and not s.startswith('#')
+            data = filter(sanitize, data.split('\n'))
+            log('analyzing %d lines of raw data' % len(data))
+
+            # analyze data line by line
+            # note: len is an O(1) operation
+            for line in data:
+                self._parse(line)
+                # try:
+                #     self._parse(line)
+                # except Exception as e:
+                #     msg = 'Could not parse line "%s"\nbecause of %s: %s'
+                #     fmt = (line, type(e), str(e))
+                #     raise ParserException(msg % fmt)
+
+            # if smoothing never got explicitly
+            # turned off
+            if len(self._smoothing[-1]) == 1:
+                self._smoothing[-1] += (len(self._faces),)
+
+            # for -verbose
+            fmt = [len(self._vertices), len(self._normals)]
+            fmt = tuple(map(lambda x: x - 1, fmt))
+            log('got %d vertices and %d normals' % fmt)
+
+            fmt = len(self._faces)
+            log('got %d vertex/vertex normal pairs for faces' % fmt)
+
+            fmt = self.stats['calculated normals']
+            log('calculated %d normals' % fmt)
+
+            fmt = (len(self._smoothing), self._smoothing)
+            log('got %d smoothing range(s): %s' % fmt)
+
+            # print self._v2vn.items()[:10]
+
         #
-        # Specifies a geometric vertex and its x y z coordinates.
-        # x y z are the x, y, and z coordinates for the vertex. These are
-        # floating point numbers that define the position of the vertex in
-        # three dimensions.
-        if dtype == 'v':
-            return tuple(map(float, data))
-
-        #   VERTEX NORMALS
+        #   PROPERTIES
         #
-        # Specifies a normal vector with components i, j, and k.
-        # Vertex normals affect the smooth-shading and rendering of geometry.
-        # For polygons, vertex normals are used in place of the actual facet
-        # normals.  For surfaces, vertex normals are interpolated over the
-        # entire surface and replace the actual analytic surface normal.
-        if dtype == 'vn':
-            return tuple(map(float, data))
+        # @property
+        def name(self):
+            return self._name
 
-        #   FACES
-        #
-        # Specifies a face element and its vertex reference number. You can
-        # optionally include the texture vertex and vertex normal reference
-        # numbers.
-        # The reference numbers for the vertices, texture vertices, and
-        # vertex normals must be separated by slashes (/). There is no space
-        # between the number and the slash.
-        #  - v is the reference number for a vertex in the face element. A
-        #    minimum of three vertices are required.
-        #  - vt (optional) is the reference number for a texture vertex in
-        #    the face element. It always follows the first slash.
-        #  - vn (optional) is the reference number for a vertex normal in the
-        #    face element. It must always follow the second slash.
-        if dtype == 'f':
+        @property
+        def vertices(self):
+            return np.array(self._vertices[1:], 'f')
 
-            # convert every reference to a valid index
-            indexmap = lambda t: None if not len(t) else int(t) - 1
+        @property
+        def faces(self):
+            v, vn = zip(*self._faces)
+            v = map(lambda i: self._vertices[i], v)
+            vn = map(lambda i: self._normals[i], vn)
+            return np.array(zip(v, vn), 'f')
 
-            # split raw data at '/' and invoke indexmap for every element
-            grind = lambda t: map(indexmap, t.split('/'))
-
-            # apply mapping
-            return tuple(map(grind, data))
-
-        raise ParserException('Unknown directive %s' % dtype)
-
-    def _store(self, raw):
-
-        # TODO implement grouping (like s or g) -> search for 's off'
-
-        try:
-            dtype, x, y, z = raw.split()
-        except ValueError:
-            msg = 'Could not parse line "%s"' % raw
-            raise ParserException(msg)
-
-        store = self.setdefault(dtype, [])
-        data = self._map(dtype, (x, y, z))
-        store.append(data)
-
+    #
+    #
+    #
+    #
+    #
     def __init__(self, fname):
         with open(fname) as f:
+            data = f.read()
+            self._objects = []
+            add = self._objects.append
 
-            # eliminate empty lines
-            lines = filter(lambda s: s.strip(), f.readlines())
-            log('read %d non-empty lines from file' % len(lines))
+            log('parsing data of size %d' % len(data))
+            objs = re.split(r'^o (.*)', data)
 
-            # save data to internal data structure
-            map(self._store, lines)  # TODO error handling
-            fmt = len(self.keys()), tuple(self.keys())
-            log('read %d keys: %s' % fmt)
+            # no 'o'-directive found
+            if len(objs) == 1:
+                add(ObjParser.Obj(fname.rstrip('.obj'), objs[0]))
+
+            # multiple objects per obj
+            for name, data in zip(objs[1::2], objs[2::2]):
+                add(ObjParser.Obj(name, data))
+
+            return
+
+        raise ParserException("Could not open file")
 
     @property
-    def vertices(self):
-        return self['v']
-
-    def faces(self):
-        # yields ((vertex1, normal1), ...)
-        # where vertexi and normali are tuples of coordinates
-        for face in self['f']:
-            vertices, _, _ = zip(*face)
-            yield map(lambda i: self['v'][i], vertices)
+    def objects(self):
+        return self._objects
