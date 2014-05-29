@@ -1,6 +1,4 @@
 #!/bin/bash
-# Felix Hamann
-# 369625
 
 # where the virtual environment 
 # gets installed
