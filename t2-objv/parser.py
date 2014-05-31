@@ -80,7 +80,7 @@ class ObjParser(object):
             #
             if dtype == 'vn':
                 data = map(float, data.split())
-                self._normals.append(-np.array(data, 'f'))
+                self._normals.append(np.array(data, 'f'))
                 return
 
             #
@@ -123,7 +123,7 @@ class ObjParser(object):
                             normal = normal / np.linalg.norm(normal)
 
                             index = len(self._normals)
-                            self._normals.append(-normal)
+                            self._normals.append(normal)
 
                     # save normals index
                     normals.append(index)
@@ -217,7 +217,11 @@ class ObjParser(object):
             fmt = (len(self._smoothing), self._smoothing)
             log('got %d smoothing range(s): %s' % fmt)
 
-            # print self._v2vn.items()[:10]
+            # statistics
+            _, normals = zip(* self._v2vn.items())
+            normals = map(lambda l: float(len(l)), normals)
+            log('faces per vertex: avg: %f, deviation: %f, variance: %f' % (
+                np.average(normals), np.std(normals), np.var(normals)))
 
         #
         #   PROPERTIES
