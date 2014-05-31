@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 
 
+import math
 from OpenGL import GL as gl
-
+from OpenGL import GLU as glu
 
 from util import Singleton
 from util import LOG
@@ -20,6 +21,15 @@ initializes and changes the scene.
 """
 
 
+class RenderException(Exception):
+
+    def __str__(self):
+        return self.msg
+
+    def __init__(self, msg):
+        self.msg = msg
+
+
 class Entity(object):
 
     def __init__(self, geometry):
@@ -27,14 +37,19 @@ class Entity(object):
         self._gm = geometry
         self.vbo = geometry.vbo
 
-    def render(self):
+    def render(self, camera):
         # log('rendering entity %s' % self._gm)
 
         # configure geometry
         gl.glLoadIdentity()
+
+        # do rotation, zoom and translation
+        gl.glTranslate(0., 0., camera.translation)
+        gl.glRotate(self._gm.angle, 0., 1., 0.)
+
+        # normalize
         gl.glScale(*self._gm.rawScale)
         gl.glTranslate(*self._gm.rawOffset)
-        gl.glRotate(self._gm.angle, 0., 1., 0.)
 
         # configure appearance
         gl.glColor(*self._gm.color)
@@ -70,10 +85,90 @@ class Entity(object):
         self._mode = value
 
 
-class Camera(object):
+@Singleton
+class Camera(list):
+
+    ORTHOGONALLY = 0
+    PROJECTIVE = 1
+
+    def _setOrthogonally(self):
+        log('set camera mode orthogonally')
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glLoadIdentity()
+
+        # apply scale by using the raw offset
+        glu.gluOrtho2D(
+            -self.offset, self.offset,
+            -self.offset, self.offset)
+
+        self._translation = 0
+        gl.glMatrixMode(gl.GL_MODELVIEW)
+
+    def _setProjective(self):
+        if self._fow is None:
+            raise RenderException('You must set the fow first.')
+
+        log('set camera mode projective (%f° field of view)' % self.fow)
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glLoadIdentity()
+
+        # apply scale later by translating
+        # the object on the z-axis
+        glu.gluPerspective(self.fow, 1., .1, 100.)
+
+        # translatation of the object based
+        # on the given field of view and offset:
+        alpha = math.radians(self.fow / 2)
+        arcsin = 1 / math.sin(alpha)
+        dx = math.sqrt(arcsin - 1) + 0.5
+
+        self._translation = -dx * self.offset
+        gl.glMatrixMode(gl.GL_MODELVIEW)
 
     def __init__(self):
-        log('creating camera')
+        log('initializing camera')
+        self._fow = None
+
+    #
+    #   PROPERTIES USED BY THE RENDERER
+    #
+    @property
+    def translation(self):
+        return self._translation
+
+    #
+    #   PROPERTIES
+    #
+    @property
+    def offset(self):
+        return self._offset
+
+    @offset.setter
+    def offset(self, offset):
+        log('set camera offset to %f' % offset)
+        self._offset = float(offset)
+
+    @property
+    def fow(self):
+        return self._fow
+
+    @fow.setter
+    def fow(self, fow):
+        self._fow = float(fow)
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, mode):
+        if mode == self.PROJECTIVE:
+            self._setProjective()
+
+        if mode == self.ORTHOGONALLY:
+            self._setOrthogonally()
+
+        self._mode = mode
 
 
 @Singleton
@@ -93,12 +188,14 @@ class Scene():
     def setShading(self, value):
         log('setting scene shader to %s' % value)
 
+        gl.glEnable(gl.GL_LIGHTING)
+        gl.glEnable(gl.GL_LIGHT0)
+
         if value == 'flat':
             gl.glShadeModel(gl.GL_FLAT)
 
         if value == 'gouraud':
-            gl.glEnable(gl.GL_LIGHTING)
-            gl.glEnable(gl.GL_LIGHT0)
+            gl.glShadeModel(gl.GL_SMOOTH)
 
         self._shading = value
 
@@ -148,7 +245,7 @@ class Scene():
 
         # render all entities
         for ent in self._entities:
-            ent.render()
+            ent.render(self.camera)
 
         gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
         gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
