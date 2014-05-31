@@ -61,7 +61,6 @@ def parse_args():
 
 def main(argv):
     args = parse_args()
-    print args
 
     if args.verbose:
         logger.setVerbose()
@@ -81,7 +80,7 @@ def main(argv):
         glt.GLUT_DOUBLE |
         glt.GLUT_RGB)
     glt.glutInitWindowSize(*ratio)
-    glt.glutCreateWindow("Object Viewer")
+    glt.glutCreateWindow("Rendering %s" % args.filename.rstrip('.obj'))
 
     #
     #   CREATE SCENE
@@ -90,6 +89,14 @@ def main(argv):
     scene.setShading(args.shading)
     scene.setBackground((0.3, 0.3, 0.3, 0.))
     scene.callback = glt.glutSwapBuffers
+
+    # create camera
+    cam = render.Camera.Instance()
+    cam.offset = 2
+    cam.mode = cam.ORTHOGONALLY
+    #cam.fow = 45
+    #cam.mode = cam.PROJECTIVE
+    scene.camera = cam
 
     # create entities
     for obj in parser.ObjParser(args.filename).objects:
