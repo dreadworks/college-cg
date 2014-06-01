@@ -38,6 +38,11 @@ def parse_args():
         help='switch to verbose mode')
 
     argp.add_argument(
+        '-t', '--trace',
+        action='store_true',
+        help='very very verbose')
+
+    argp.add_argument(
         'filename',
         type=str,
         help='obj file')
@@ -56,6 +61,11 @@ def parse_args():
         default='gouraud',
         help='shading mode')
 
+    argp.add_argument(
+        '--fow', type=int,
+        default=45,
+        help='field of view for projective perspective')
+
     return argp.parse_args()
 
 
@@ -64,6 +74,9 @@ def main(argv):
 
     if args.verbose:
         logger.setVerbose()
+
+    if args.trace:
+        logger.setTrace()
 
     # determine window size
     ratio = map(int, args.res.split('x'))
@@ -89,13 +102,14 @@ def main(argv):
     scene.setShading(args.shading)
     scene.setBackground((0.3, 0.3, 0.3, 0.))
     scene.callback = glt.glutSwapBuffers
+    scene.repaint = glt.glutPostRedisplay
 
     # create camera
     cam = render.Camera.Instance()
     cam.offset = 2
+    cam.fow = args.fow
+    cam.ratio = ratio
     cam.mode = cam.ORTHOGONALLY
-    #cam.fow = 45
-    #cam.mode = cam.PROJECTIVE
     scene.camera = cam
 
     # create entities
@@ -109,10 +123,13 @@ def main(argv):
     def rotate():  # TODO remove
         for ent in scene.entities:
             ent.geometry.angle += 1
-        glt.glutPostRedisplay()
+        scene.repaint()
 
+    glt.glutMouseFunc(scene.evt.mouseClicked)
+    glt.glutMotionFunc(scene.evt.mouseMove)
+    glt.glutKeyboardFunc(scene.evt.keyPressed)
     glt.glutDisplayFunc(scene.render)
-    glt.glutIdleFunc(rotate)
+    # glt.glutIdleFunc(rotate)
 
     # dispatch
     glt.glutMainLoop()

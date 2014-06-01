@@ -57,6 +57,7 @@ class Polyhedron(object):
 
         # defaults
         self._angle = 0
+        self._position = (0., 0., 0.)
         self._color = (1., 1., 1., 0.)
 
         log("loaded %d faces" % len(self.faces))
@@ -98,3 +99,11 @@ class Polyhedron(object):
     @angle.setter
     def angle(self, value):
         self._angle = value % 360
+
+    @property
+    def position(self):
+        return self._position
+
+    @position.setter
+    def position(self, position):
+        self._position = position

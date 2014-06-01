@@ -3,12 +3,14 @@
 
 
 import math
+import itertools
 from OpenGL import GL as gl
 from OpenGL import GLU as glu
 
 from util import Singleton
 from util import LOG
 log = LOG.out.info
+trace = LOG.out.trace
 
 
 """
@@ -30,6 +32,89 @@ class RenderException(Exception):
         self.msg = msg
 
 
+class Handler(object):
+
+    # minimal zoom offset
+    MIN_OFFSET = 1e-5
+
+    # map binary masks to the different mouse buttons
+    MODE_ZOOM = 1 << 0  # zoom middle mouse button
+    MODE_MOVE = 1 << 1  # entity translation with right mouse button
+    MODE_AROT = 1 << 2  # arcball rotation with left mouse button
+
+    # map mutually exclusive coloring modes
+    MODE_CLR_BG = 0     # background coloring
+    MODE_CLR_ENT = 1    # entity coloring
+
+    def __init__(self, scene):
+        self.modes = (
+            self.MODE_AROT,  # 0 => left mouse button
+            self.MODE_ZOOM,  # 1 => middle mouse button
+            self.MODE_MOVE)  # 2 => right mouse button
+
+        self._mode = 0       # initially no mouse button is pressed
+        self.scene = scene   # access to camera and entities
+
+    def mouseClicked(self, btn, up, x, y):
+        self._mode = self._mode ^ self.modes[btn]
+        log('set mouse mode to ' + bin(self._mode))
+
+        if not up:
+            self._coords = (x, y)
+
+    def mouseMove(self, *coords):
+        camera = self.scene.camera
+        dx, dy = [x - y for x, y in zip(coords, self._coords)]
+        trace('mouseMove (%d, %d), offset (%d, %d)' % (x, y, dx, dy))
+
+        #
+        #   zoom in or out
+        #
+        if self._mode & self.MODE_ZOOM:
+            offset = camera.offset
+            offset += dy / 100.
+            if offset > self.MIN_OFFSET:
+                camera.offset = offset
+
+        #
+        #   move object
+        #
+        if self._mode & self.MODE_MOVE:
+            # the mouse movement must be translated
+            # to the scene with regards to the zoom
+            # and viewport ratio reference
+            offset = camera.offset
+            f = camera.ratioref / 2. / offset
+
+            for ent in self.scene.entities:
+                x, y, z = ent.geometry.position
+                ddx, ddy = map(lambda a: a / f, [dx, dy])
+                ent.geometry.position = x + ddx, y - ddy, z
+
+        #
+        #   arcball rotation
+        #
+        if self._mode & self.MODE_AROT:
+            pass  # TODO
+
+        self._coords = coords
+        self.scene.repaint()
+
+    def keyPressed(self, key, x, y):
+        if key == 'o':
+            cam = self.scene.camera
+            cam.mode = cam.ORTHOGONALLY
+
+        if key == 'p':
+            cam = self.scene.camera
+            cam.mode = cam.PROJECTIVE
+
+        self.scene.repaint()
+
+
+#
+#   ENTITIES
+#
 class Entity(object):
 
     def __init__(self, geometry):
@@ -38,21 +123,29 @@ class Entity(object):
         self.vbo = geometry.vbo
 
     def render(self, camera):
-        # log('rendering entity %s' % self._gm)
+        geometry = self.geometry
+        trace('rendering entity %s at position %s' % (
+            geometry, geometry.position))
 
         # configure geometry
         gl.glLoadIdentity()
 
         # do rotation, zoom and translation
         gl.glTranslate(0., 0., camera.translation)
+        gl.glTranslate(*geometry.position)
+
+        # save for plane
+        gl.glPushMatrix()
+
+        # alter entities
         gl.glRotate(self._gm.angle, 0., 1., 0.)
 
         # normalize
-        gl.glScale(*self._gm.rawScale)
-        gl.glTranslate(*self._gm.rawOffset)
+        gl.glScale(*geometry.rawScale)
+        gl.glTranslate(*geometry.rawOffset)
 
         # configure appearance
-        gl.glColor(*self._gm.color)
+        gl.glColor(*geometry.color)
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, self.mode)
 
         # render vertex/normal buffer
@@ -85,6 +178,9 @@ class Entity(object):
         self._mode = value
 
 
+#
+#   CAMERA
+#
 @Singleton
 class Camera(list):
 
@@ -92,7 +188,7 @@ class Camera(list):
     PROJECTIVE = 1
 
     def _setOrthogonally(self):
-        log('set camera mode orthogonally')
+        trace('set camera mode orthogonally')
         gl.glMatrixMode(gl.GL_PROJECTION)
         gl.glLoadIdentity()
 
@@ -108,7 +204,7 @@ class Camera(list):
         if self._fow is None:
             raise RenderException('You must set the fow first.')
 
-        log('set camera mode projective (%f° field of view)' % self.fow)
+        trace('set camera mode projective (%f° field of view)' % self.fow)
         gl.glMatrixMode(gl.GL_PROJECTION)
         gl.glLoadIdentity()
 
@@ -145,8 +241,13 @@ class Camera(list):
 
     @offset.setter
     def offset(self, offset):
-        log('set camera offset to %f' % offset)
+        trace('set camera offset to %f' % offset)
         self._offset = float(offset)
+
+        try:
+            self.mode = self.mode  # reinitialize
+        except:
+            log('camera reinitialization attempt futile')
 
     @property
     def fow(self):
@@ -155,6 +256,21 @@ class Camera(list):
     @fow.setter
     def fow(self, fow):
         self._fow = float(fow)
+
+    @property
+    def ratio(self):
+        return self._ratio
+
+    @property
+    def ratioref(self):
+        return self._ratioref
+
+    @ratio.setter
+    def ratio(self, ratio):
+        self._ratio = ratio
+        self._ratioref = min(ratio)
+        log('set camera ratio to %s and ratioref to %d' % (
+            self.ratio, self.ratioref))
 
     @property
     def mode(self):
@@ -171,12 +287,18 @@ class Camera(list):
         self._mode = mode
 
 
+#
+#   SCENE
+#
 @Singleton
-class Scene():
+class Scene(object):
 
     def __init__(self):
         log('initializing scene')
         self._entities = []
+
+        log('initializing handler')
+        self.evt = Handler(self)
 
         gl.glEnable(gl.GL_NORMALIZE)
         gl.glEnable(gl.GL_DEPTH_TEST)
@@ -200,10 +322,19 @@ class Scene():
         self._shading = value
 
     @property
+    def repaint(self):
+        return self._repaint
+
+    @repaint.setter
+    def repaint(self, value):
+        self._repaint = value
+
+    @property
     def callback(self):
         return self._callback
 
-    def setCallback(self, value):
+    @callback.setter
+    def callback(self, value):
         self._callback = value
 
     @property
@@ -219,8 +350,8 @@ class Scene():
         return self._camera
 
     @camera.setter
-    def camera(self, value):
-        self._camera = value
+    def camera(self, cam):
+        self._camera = cam
 
     @property
     def entities(self):
@@ -234,7 +365,8 @@ class Scene():
         return ent
 
     def render(self):
-        # log('rendering scene')
+        trace('rendering scene')
+
         gl.glClear(
             gl.GL_COLOR_BUFFER_BIT |
             gl.GL_DEPTH_BUFFER_BIT)
@@ -249,4 +381,15 @@ class Scene():
 
         gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
         gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
+
+        # render floor
+        gl.glPopMatrix()
+        gl.glTranslate(0., -1., 0.)
+
+        gl.glBegin(gl.GL_LINE_LOOP)
+        for x, z in itertools.product([-1, 1], repeat=2):
+            gl.glVertex(x, 0, z)
+        gl.glEnd()
+        gl.glFlush()
+
         self.callback()

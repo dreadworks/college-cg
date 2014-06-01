@@ -34,10 +34,15 @@ class Log(object):
         log.setLevel(logging.ERROR)
         log.addHandler(logger['stream'])
         self.out = log
+        self.out.trace = self.out.debug
 
     def setVerbose(self):
         self.out.setLevel(logging.INFO)
         self.out.info('logger mode set verbose')
+
+    def setTrace(self):
+        self.out.setLevel(logging.DEBUG)
+        self.out.trace('logger mode set to trace mode')
 
 # initialize
 LOG = Log('objv')
