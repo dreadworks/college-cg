@@ -12,7 +12,7 @@ import render
 import parser
 import geometry
 from util import LOG as logger
-
+log = logger.out.info
 
 """
 
@@ -70,6 +70,7 @@ def parse_args():
 
 
 def main(argv):
+    delim = '\n' + '- ' * 40
     args = parse_args()
 
     if args.verbose:
@@ -98,6 +99,7 @@ def main(argv):
     #
     #   CREATE SCENE
     #
+    log('initializing glut:%s' % delim)
     scene = render.Scene.Instance()
     scene.setShading(args.shading)
     scene.setBackground((0.3, 0.3, 0.3, 0.))
@@ -113,6 +115,7 @@ def main(argv):
     scene.camera = cam
 
     # create entities
+    log('parsing and inintializing geometries:%s' % delim)
     for obj in parser.ObjParser(args.filename).objects:
         polyhedron = geometry.Polyhedron(obj)
         scene.addEntity(polyhedron)
@@ -120,6 +123,8 @@ def main(argv):
     #
     #   BIND HANDLER
     #
+    log('listening:%s' % delim)
+
     def rotate():  # TODO remove
         for ent in scene.entities:
             ent.geometry.angle += 1
