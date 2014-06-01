@@ -59,10 +59,6 @@ class ObjParser(object):
         TODO docs
 
         """
-        stats = {
-            'calculated normals': 0
-        }
-
         def _parse(self, line):
             dtype, data = re.split(r' ', line, maxsplit=1)
             data = data.strip()
@@ -97,6 +93,7 @@ class ObjParser(object):
                 normal = None  # cache
 
                 for i, pair in enumerate(data):
+                    # 'f v/vt/vn' case
                     if len(pair) == 3:
                         index = int(pair[2])
 
@@ -104,7 +101,6 @@ class ObjParser(object):
                     #   calculate new surface normal
                     #
                     else:
-
                         if normal is not None:
                             index = len(self._normals) - 1
 
@@ -148,12 +144,14 @@ class ObjParser(object):
                 if data == 'on':
                     if len(g) == 2:
                         self._smoothing.append((facecount,))
+                    return
 
             #
             #   IGNORE
             #
             if dtype == 'usemtl':
-                log('ignoring directive %s' % dtype)
+                fmt = dtype, data
+                log('ignoring directive %s with data %s' % fmt)
                 return
 
             #
@@ -161,6 +159,31 @@ class ObjParser(object):
             #
             msg = 'Could not map directive "%s"'
             raise ParserException(msg % dtype)
+
+        def _smooth(self, group):
+            log('smoothing normals between %d and %d' % group)
+
+            for i in range(*group):
+                v = self._faces[i][0]
+
+                # cache miss
+                if not type(self._v2vn[v]) is int:
+
+                    # obtain normals
+                    normals = self._v2vn[v]
+                    normals = map(lambda i: self._normals[i], normals)
+
+                    # calculate average normal
+                    smoothed = sum(normals) / len(normals)
+                    smoothed = smoothed / np.linalg.norm(smoothed)
+
+                    # save smoothed normal
+                    self._normals.append(smoothed)
+                    self._v2vn[v] = len(self._normals) - 1
+                    self.stats['smoothed normals'] += 1
+
+                # save new vn to the faces (v, vn) tuple
+                self._faces[i] = self._faces[i][0], self._v2vn[v]
 
         def __init__(self, name, data):
             self._name = name
@@ -170,11 +193,16 @@ class ObjParser(object):
             # normals per vertex when serving faces
             self._v2vn = {}
 
+            # just for statistics
+            self.stats = {
+                'calculated normals': 0,
+                'smoothed normals': 0}
+
             # enumerations in obj's begin
             # with value 1 (for whatever reason...)
             # hence the None element.
-            self._vertices = [None]   # [None, (x, y, z)₀, ...]
-            self._normals = [None]    # [None, (x, y, z)₀, ...]
+            self._vertices = [None]   # [None, (x, y, z)₀, ...] ()₀ is np.array
+            self._normals = [None]    # [None, (x, y, z)₀, ...] ()₀ is np.array
             self._smoothing = [(0,)]  # Ranges of faces where
                                       # smoothing is activated
             self._faces = []          # [(v₀, vn₀), (v₁, vn₁), ...],
@@ -190,18 +218,21 @@ class ObjParser(object):
             # analyze data line by line
             # note: len is an O(1) operation
             for line in data:
-                self._parse(line)
-                # try:
-                #     self._parse(line)
-                # except Exception as e:
-                #     msg = 'Could not parse line "%s"\nbecause of %s: %s'
-                #     fmt = (line, type(e), str(e))
-                #     raise ParserException(msg % fmt)
+                try:
+                    self._parse(line)
+                except Exception as e:
+                    msg = 'Could not parse line "%s"\nbecause of %s: %s'
+                    fmt = (line, type(e), str(e))
+                    raise ParserException(msg % fmt)
 
-            # if smoothing never got explicitly
-            # turned off
+            # if smoothing never got
+            # explicitly turned off
             if len(self._smoothing[-1]) == 1:
                 self._smoothing[-1] += (len(self._faces),)
+
+            # smooth if necessary
+            for group in self._smoothing:
+                self._smooth(group)
 
             # for -verbose
             fmt = [len(self._vertices), len(self._normals)]
@@ -214,14 +245,9 @@ class ObjParser(object):
             fmt = self.stats['calculated normals']
             log('calculated %d normals' % fmt)
 
-            fmt = (len(self._smoothing), self._smoothing)
-            log('got %d smoothing range(s): %s' % fmt)
-
-            # statistics
-            _, normals = zip(* self._v2vn.items())
-            normals = map(lambda l: float(len(l)), normals)
-            log('faces per vertex: avg: %f, deviation: %f, variance: %f' % (
-                np.average(normals), np.std(normals), np.var(normals)))
+            fmt = self.stats['smoothed normals']
+            fmt = fmt, sum([y - x for x, y in self._smoothing])
+            log('calculated %d smoothed normals of %d definitions' % fmt)
 
         #
         #   PROPERTIES
@@ -247,6 +273,8 @@ class ObjParser(object):
     #
     #
     def __init__(self, fname):
+        log('parsing %s' % fname)
+
         with open(fname) as f:
             data = f.read()
             self._objects = []
