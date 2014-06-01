@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# force floating point division
+from __future__ import division
+
 
 import math
 import itertools
+import operator as op
 from OpenGL import GL as gl
 from OpenGL import GLU as glu
 
@@ -34,9 +38,6 @@ class RenderException(Exception):
 
 class Handler(object):
 
-    # minimal zoom offset
-    MIN_OFFSET = 1e-5
-
     # map binary masks to the different mouse buttons
     MODE_ZOOM = 1 << 0  # zoom middle mouse button
     MODE_MOVE = 1 << 1  # entity translation with right mouse button
@@ -55,9 +56,14 @@ class Handler(object):
         self._mode = 0       # initially no mouse button is pressed
         self.scene = scene   # access to camera and entities
 
+    def reshape(self, width, height):
+        trace('reshape called with %d, %d' % (width, height))
+        self.scene.camera.ratio = width, height
+        self.scene.repaint()
+
     def mouseClicked(self, btn, up, x, y):
         self._mode = self._mode ^ self.modes[btn]
-        log('set mouse mode to ' + bin(self._mode))
+        trace('set mouse mode to ' + bin(self._mode))
 
         if not up:
             self._coords = (x, y)
@@ -73,8 +79,7 @@ class Handler(object):
         if self._mode & self.MODE_ZOOM:
             offset = camera.offset
             offset += dy / 100.
-            if offset > self.MIN_OFFSET:
-                camera.offset = offset
+            camera.offset = offset
 
         #
         #   move object
@@ -83,7 +88,7 @@ class Handler(object):
             # the mouse movement must be translated
             # to the scene with regards to the zoom
             # and viewport ratio reference
-            offset = camera.offset
+            offset = camera.offset if camera.offset > 0.5 else 0.5
             f = camera.ratioref / 2. / offset
 
             for ent in self.scene.entities:
@@ -131,7 +136,7 @@ class Entity(object):
         gl.glLoadIdentity()
 
         # do rotation, zoom and translation
-        gl.glTranslate(0., 0., camera.translation)
+        gl.glTranslate(*camera.translation)
         gl.glTranslate(*geometry.position)
 
         # save for plane
@@ -187,43 +192,58 @@ class Camera(list):
     ORTHOGONALLY = 0
     PROJECTIVE = 1
 
+    def _reinitialize(self):
+        try:  # check necessary props are set
+            self.offset = self.offset
+            self.mode
+            if self.mode == self.PROJECTIVE:
+                self.fow
+        except:
+            log('camera reinitialization attempt futile')
+            return
+
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glLoadIdentity()
+
+        if self.mode == self.PROJECTIVE:
+            self._setProjective()
+
+        if self.mode == self.ORTHOGONALLY:
+            self._setOrthogonally()
+
+        gl.glMatrixMode(gl.GL_MODELVIEW)
+        self.offset = self.offset
+
     def _setOrthogonally(self):
         trace('set camera mode orthogonally')
-        gl.glMatrixMode(gl.GL_PROJECTION)
-        gl.glLoadIdentity()
 
-        # apply scale by using the raw offset
-        glu.gluOrtho2D(
-            -self.offset, self.offset,
-            -self.offset, self.offset)
+        # apply scale by using the camera's offset
+        # and scale based on the smallest side
+        o, r = self.offset, self.asprat
+        horiz, vert = (r * o, o) if r > 1 else (o, o / r)
 
-        self._translation = 0
-        gl.glMatrixMode(gl.GL_MODELVIEW)
+        glu.gluOrtho2D(-horiz, horiz, -vert, vert)
+        self.translation = 0.
 
     def _setProjective(self):
-        if self._fow is None:
-            raise RenderException('You must set the fow first.')
-
         trace('set camera mode projective (%f° field of view)' % self.fow)
-        gl.glMatrixMode(gl.GL_PROJECTION)
-        gl.glLoadIdentity()
 
         # apply scale later by translating
         # the object on the z-axis
-        glu.gluPerspective(self.fow, 1., .1, 100.)
+        glu.gluPerspective(self.fow, self.asprat, .1, 100.)
 
-        # translatation of the object based
-        # on the given field of view and offset:
+        # translatation based on the offset
         alpha = math.radians(self.fow / 2)
         arcsin = 1 / math.sin(alpha)
         dx = math.sqrt(arcsin - 1) + 0.5
 
-        self._translation = -dx * self.offset
-        gl.glMatrixMode(gl.GL_MODELVIEW)
+        # translation based on the aspect ratio
+        ratio = 1. if self.asprat > 1 else self.asprat
+        self.translation = -dx * (self.offset / ratio) - 2.
 
     def __init__(self):
         log('initializing camera')
-        self._fow = None
+        self._offset = 0.
 
     #
     #   PROPERTIES USED BY THE RENDERER
@@ -231,6 +251,10 @@ class Camera(list):
     @property
     def translation(self):
         return self._translation
+
+    @translation.setter
+    def translation(self, trans):
+        self._translation = 0., 0., trans
 
     #
     #   PROPERTIES
@@ -241,13 +265,19 @@ class Camera(list):
 
     @offset.setter
     def offset(self, offset):
-        trace('set camera offset to %f' % offset)
-        self._offset = float(offset)
+        if self.mode == self.PROJECTIVE:
+            minOffset = 0.
 
-        try:
-            self.mode = self.mode  # reinitialize
-        except:
-            log('camera reinitialization attempt futile')
+        if self.mode == self.ORTHOGONALLY:
+            minOffset = 1.
+
+        if offset < minOffset:
+            offset = minOffset
+
+        if offset != self.offset:
+            trace('set camera offset to %f' % offset)
+            self._offset = float(offset)
+            self._reinitialize()
 
     @property
     def fow(self):
@@ -262,15 +292,24 @@ class Camera(list):
         return self._ratio
 
     @property
+    def asprat(self):
+        return self._asprat
+
+    @property
     def ratioref(self):
         return self._ratioref
 
     @ratio.setter
     def ratio(self, ratio):
+        gl.glViewport(0, 0, *ratio)
+
         self._ratio = ratio
+        self._asprat = op.truediv(*ratio)
         self._ratioref = min(ratio)
-        log('set camera ratio to %s and ratioref to %d' % (
-            self.ratio, self.ratioref))
+
+        self._reinitialize()
+        trace('set camera ratio to %s, asprat: %f and ratioref: %d' % (
+            self.ratio, self.asprat, self.ratioref))
 
     @property
     def mode(self):
@@ -278,13 +317,8 @@ class Camera(list):
 
     @mode.setter
     def mode(self, mode):
-        if mode == self.PROJECTIVE:
-            self._setProjective()
-
-        if mode == self.ORTHOGONALLY:
-            self._setOrthogonally()
-
         self._mode = mode
+        self._reinitialize()
 
 
 #
@@ -316,7 +350,7 @@ class Scene(object):
         if value == 'flat':
             gl.glShadeModel(gl.GL_FLAT)
 
-        if value == 'gouraud':
+        if value == 'smooth':
             gl.glShadeModel(gl.GL_SMOOTH)
 
         self._shading = value
@@ -379,17 +413,17 @@ class Scene(object):
         for ent in self._entities:
             ent.render(self.camera)
 
+            # render floor under entity
+            gl.glPopMatrix()
+            gl.glTranslate(0., -1., 0.)
+
+            gl.glBegin(gl.GL_LINE_LOOP)
+            for x, z in itertools.product([-1, 1], repeat=2):
+                gl.glVertex(x, 0, z)
+            gl.glEnd()
+
         gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
         gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
 
-        # render floor
-        gl.glPopMatrix()
-        gl.glTranslate(0., -1., 0.)
-
-        gl.glBegin(gl.GL_LINE_LOOP)
-        for x, z in itertools.product([-1, 1], repeat=2):
-            gl.glVertex(x, 0, z)
-        gl.glEnd()
         gl.glFlush()
-
         self.callback()

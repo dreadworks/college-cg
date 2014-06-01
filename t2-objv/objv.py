@@ -12,7 +12,7 @@ import render
 import parser
 import geometry
 from util import LOG as logger
-log = logger.out.info
+log, trace = logger.out.info, logger.out.trace
 
 """
 
@@ -57,8 +57,8 @@ def parse_args():
     argp.add_argument(
         '-s', '--shading',
         type=str,
-        choices=['grid', 'flat', 'gouraud', 'phong'],
-        default='gouraud',
+        choices=['grid', 'flat', 'smooth'],
+        default='smooth',
         help='shading mode')
 
     argp.add_argument(
@@ -108,10 +108,11 @@ def main(argv):
 
     # create camera
     cam = render.Camera.Instance()
-    cam.offset = 2
     cam.fow = args.fow
     cam.ratio = ratio
     cam.mode = cam.ORTHOGONALLY
+    # cam.mode = cam.PROJECTIVE
+    cam.offset = 1
     scene.camera = cam
 
     # create entities
@@ -123,16 +124,20 @@ def main(argv):
     #
     #   BIND HANDLER
     #
-    log('listening:%s' % delim)
+    trace('listening:%s' % delim)
 
     def rotate():  # TODO remove
         for ent in scene.entities:
             ent.geometry.angle += 1
         scene.repaint()
 
+    # bind scene.evt handler
     glt.glutMouseFunc(scene.evt.mouseClicked)
     glt.glutMotionFunc(scene.evt.mouseMove)
     glt.glutKeyboardFunc(scene.evt.keyPressed)
+    glt.glutReshapeFunc(scene.evt.reshape)
+
+    # bind rendering loop handler
     glt.glutDisplayFunc(scene.render)
     # glt.glutIdleFunc(rotate)
 
