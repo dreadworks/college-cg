@@ -58,7 +58,6 @@ class Polyhedron(object):
         # defaults
         self._angle = 0
         self._position = (0., 0., 0.)
-        self._color = (1., 1., 1., 0.)
 
         log("loaded %d faces" % len(self.faces))
 
@@ -84,14 +83,6 @@ class Polyhedron(object):
     #
     #   CONFIGURABLE PROPERTIES
     #
-    @property
-    def color(self):
-        return self._color
-
-    @color.setter
-    def color(self, color):
-        self._color = color
-
     @property
     def angle(self):
         return self._angle
