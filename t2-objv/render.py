@@ -4,7 +4,6 @@
 # force floating point division
 from __future__ import division
 
-
 import math
 import itertools
 import operator as op
@@ -126,11 +125,14 @@ class Entity(object):
         log('initializing entity')
         self._gm = geometry
         self.vbo = geometry.vbo
+        self.material = Material()
 
     def render(self, camera):
         geometry = self.geometry
         trace('rendering entity %s at position %s' % (
             geometry, geometry.position))
+
+        self.material.update()
 
         # configure geometry
         gl.glLoadIdentity()
@@ -150,7 +152,6 @@ class Entity(object):
         gl.glTranslate(*geometry.rawOffset)
 
         # configure appearance
-        gl.glColor(*geometry.color)
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, self.mode)
 
         # render vertex/normal buffer
@@ -174,13 +175,151 @@ class Entity(object):
     def mode(self):
         return self._mode
 
+    @mode.setter
+    def mode(self, value):
+        self._mode = value
+
     @property
     def geometry(self):
         return self._gm
 
-    @mode.setter
-    def mode(self, value):
-        self._mode = value
+    @property
+    def material(self):
+        return self._material
+
+    @material.setter
+    def material(self, value):
+        self._material = value
+
+
+class Light(object):
+
+    _SOURCES = [
+        gl.GL_LIGHT7, gl.GL_LIGHT6, gl.GL_LIGHT5,
+        gl.GL_LIGHT4, gl.GL_LIGHT3, gl.GL_LIGHT2,
+        gl.GL_LIGHT1, gl.GL_LIGHT0]
+
+    def __init__(self):
+        try:
+            self._source = self._SOURCES.pop()
+            log('creating light %s' % self._source)
+
+            # set default values explicitly
+            self.ambient = 0., 0., 0., 1.
+            self.diffuse = 1., 1., 1., 1.
+            self.specular = 1., 1., 1., 1.
+            self.position = 0., 0., 0., 0.
+
+        except Exception:
+            raise RenderException('You can specify 8 lights, not more')
+
+    @property
+    def position(self):
+        return self._position
+
+    @position.setter
+    def position(self, pos):
+        self._position = gl.GL_POSITION, pos
+
+    @property
+    def ambient(self):
+        return self._ambient
+
+    @ambient.setter
+    def ambient(self, value):
+        self._ambient = gl.GL_AMBIENT, value
+
+    @property
+    def diffuse(self):
+        return self._diffuse
+
+    @diffuse.setter
+    def diffuse(self, value):
+        self._diffuse = gl.GL_DIFFUSE, value
+
+    @property
+    def specular(self):
+        return self._specular
+
+    @specular.setter
+    def specular(self, value):
+        self._specular = gl.GL_SPECULAR, value
+
+    def update(self):
+        gl.glLight(self._source, *self.position)
+        gl.glLight(self._source, *self.ambient)
+        gl.glLight(self._source, *self.diffuse)
+        gl.glLight(self._source, *self.specular)
+        gl.glEnable(self._source)
+
+
+class Material(object):
+
+    def __init__(self):
+        # set default values explicitly
+        self.face = gl.GL_FRONT_AND_BACK
+        self.ambient = .2, .2, .2, 1.
+        self.diffuse = .8, .8, .8, 1.
+        self.specular = 0., 0., 0., 1.
+        self.emission = 0., 0., 0., 1.
+        self.shininess = 0.
+
+    @property
+    def face(self):
+        return self._face
+
+    @face.setter
+    def face(self, value):
+        self._face = value
+
+    @property
+    def ambient(self):
+        return self._ambient
+
+    @ambient.setter
+    def ambient(self, value):
+        self._ambient = gl.GL_AMBIENT, value
+
+    @property
+    def diffuse(self):
+        return self._diffuse
+
+    @diffuse.setter
+    def diffuse(self, value):
+        self._diffuse = gl.GL_DIFFUSE, value
+
+    @property
+    def specular(self):
+        return self._specular
+
+    @specular.setter
+    def specular(self, value):
+        self._specular = gl.GL_SPECULAR, value
+
+    @property
+    def emission(self):
+        return self._emission
+
+    @emission.setter
+    def emission(self, value):
+        self._emission = gl.GL_EMISSION, value
+
+    @property
+    def shininess(self):
+        return self._shininess
+
+    @shininess.setter
+    def shininess(self, value):
+        # value in [0, 128]
+        self._shininess = gl.GL_SHININESS, value
+
+    def update(self):
+        f = self.face
+        gl.glMaterial(f, *self.ambient)
+        gl.glMaterial(f, *self.diffuse)
+        gl.glMaterial(f, *self.specular)
+        gl.glMaterial(f, *self.emission)
+        gl.glMaterial(f, *self.shininess)
 
 
 #
@@ -330,6 +469,7 @@ class Scene(object):
     def __init__(self):
         log('initializing scene')
         self._entities = []
+        self._lights = []
 
         log('initializing handler')
         self.evt = Handler(self)
@@ -343,9 +483,7 @@ class Scene(object):
 
     def setShading(self, value):
         log('setting scene shader to %s' % value)
-
         gl.glEnable(gl.GL_LIGHTING)
-        gl.glEnable(gl.GL_LIGHT0)
 
         if value == 'flat':
             gl.glShadeModel(gl.GL_FLAT)
@@ -398,6 +536,11 @@ class Scene(object):
         self._entities.append(ent)
         return ent
 
+    def createLight(self):
+        light = Light()
+        self._lights.append(light)
+        return light
+
     def render(self):
         trace('rendering scene')
 
@@ -406,6 +549,11 @@ class Scene(object):
             gl.GL_DEPTH_BUFFER_BIT)
 
         gl.glMatrixMode(gl.GL_MODELVIEW)
+
+        # render lights
+        for light in self._lights:
+            light.update()
+
         gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
         gl.glEnableClientState(gl.GL_NORMAL_ARRAY)
 

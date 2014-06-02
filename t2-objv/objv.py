@@ -8,9 +8,11 @@ import argparse
 from OpenGL import GLUT as glt
 
 
+import util
 import render
 import parser
 import geometry
+
 from util import LOG as logger
 log, trace = logger.out.info, logger.out.trace
 
@@ -102,9 +104,13 @@ def main(argv):
     log('initializing glut:%s' % delim)
     scene = render.Scene.Instance()
     scene.setShading(args.shading)
-    scene.setBackground((0.3, 0.3, 0.3, 0.))
     scene.callback = glt.glutSwapBuffers
     scene.repaint = glt.glutPostRedisplay
+
+    # alter appearance
+    scene.setBackground(util.Color().hex(0x33333300))
+    light = scene.createLight()
+    light.position = 2., 2., 2.
 
     # create camera
     cam = render.Camera.Instance()
@@ -119,7 +125,10 @@ def main(argv):
     log('parsing and inintializing geometries:%s' % delim)
     for obj in parser.ObjParser(args.filename).objects:
         polyhedron = geometry.Polyhedron(obj)
-        scene.addEntity(polyhedron)
+        ent = scene.addEntity(polyhedron)
+        ent.material.ambient = util.Color().rgba(0, 123, 255, 0.5)
+        # ent.material.specular = .2, .2, .2, .5
+        # ent.material.shininess = 100
 
     #
     #   BIND HANDLER
