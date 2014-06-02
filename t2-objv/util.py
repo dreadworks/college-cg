@@ -88,3 +88,35 @@ class Singleton:
 
     def __instancecheck__(self, inst):
         return isinstance(inst, self._decorated)
+
+
+#
+#   COLOR
+#
+class Color(list):
+
+    def _clear(self):
+        del self[0:len(self)]
+
+    def __init__(self):
+        self += [0., 0., 0.]
+
+    def rgba(self, r, g, b, a):
+        # r, g, b in [0, 255], a in [0, 1]
+        self._clear()
+
+        rgb = r, g, b
+        for v in rgb:
+            self.append(v / float(0xff))
+
+        self.append(a)
+        return self
+
+    def hex(self, code):
+        self._clear()
+
+        for offset in range(0, 32, 8):
+            v = (code >> offset) & 0xff
+            self.insert(0, v / float(0xff))
+
+        return self
