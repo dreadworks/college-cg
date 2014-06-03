@@ -114,11 +114,8 @@ def main(argv):
 
     # create camera
     cam = render.Camera.Instance()
-    cam.fow = args.fow
-    cam.ratio = ratio
-    cam.mode = cam.ORTHOGONALLY
-    # cam.mode = cam.PROJECTIVE
-    cam.offset = 1
+    cam.fow, cam.ratio = args.fow, ratio
+    cam.mode, cam.offset = cam.ORTHOGONALLY, 1
     scene.camera = cam
 
     # create entities
@@ -134,20 +131,10 @@ def main(argv):
     #   BIND HANDLER
     #
     trace('listening:%s' % delim)
-
-    def rotate():  # TODO remove
-        for ent in scene.entities:
-            ent.geometry.angle += 1
-        scene.repaint()
-
-    # bind scene.evt handler
     glt.glutMouseFunc(scene.evt.mouseClicked)
     glt.glutMotionFunc(scene.evt.mouseMove)
     glt.glutKeyboardFunc(scene.evt.keyPressed)
     glt.glutReshapeFunc(scene.evt.reshape)
-
-    # bind rendering loop handler
-    # glt.glutIdleFunc(rotate)
 
     # dispatch
     glt.glutDisplayFunc(scene.render)

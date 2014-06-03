@@ -23,6 +23,15 @@ calculate missing (geometrical) data.
 """
 
 
+class GeometryException(Exception):
+
+    def __str__(self):
+        return self.msg
+
+    def __init__(self, msg):
+        self.msg = msg
+
+
 class Polyhedron(object):
 
     def __str__(self):
@@ -54,10 +63,12 @@ class Polyhedron(object):
         self._faces = obj.faces
         self._rawOffset = offset
         self._rawScale = scale
+        self._lastRotmat = np.identity(4)
 
         # defaults
-        self._angle = 0
-        self._position = (0., 0., 0.)
+        self.angle = 0
+        self.rotaxis = 0., 1., 0.
+        self.position = 0., 0., 0.
 
         log("loaded %d faces" % len(self.faces))
 
@@ -80,6 +91,31 @@ class Polyhedron(object):
     def rawOffset(self):
         return self._rawOffset
 
+    @property
+    def rotation(self):
+        try:
+            self.angle, self.rotaxis
+        except:
+            raise GeometryException(
+                'Angle and rotaxis must be set to use rotate')
+
+        s, c = math.sin(self.angle), math.cos(self.angle)
+        l = np.linalg.norm(self.rotaxis)
+        x, y, z = [q / l for q in self.rotaxis]
+        mc = 1 - c
+
+        r = np.matrix([
+            [(x * x * mc + c), (x * y * mc - z * s), (x * z * mc + y * s), 0],
+            [(x * y * mc + z * s), (y * y * mc + c), (y * z * mc - x * s), 0],
+            [(x * z * mc + y * s), (y * z * mc + x * s), (z * z * mc + c), 0],
+            [0, 0, 0, 1]])
+
+        # column major for OpenGL
+        return self._lastRotmat * r.transpose()
+
+    def saveRotation(self):
+        self._lastRotmat = self.rotation
+
     #
     #   CONFIGURABLE PROPERTIES
     #
@@ -90,6 +126,14 @@ class Polyhedron(object):
     @angle.setter
     def angle(self, value):
         self._angle = value % 360
+
+    @property
+    def rotaxis(self):
+        return self._rotaxis
+
+    @rotaxis.setter
+    def rotaxis(self, value):
+        self._rotaxis = value
 
     @property
     def position(self):

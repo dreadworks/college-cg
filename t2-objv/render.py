@@ -6,6 +6,7 @@ from __future__ import division
 
 import math
 import itertools
+import numpy as np
 import operator as op
 from OpenGL import GL as gl
 from OpenGL import GLU as glu
@@ -78,11 +79,18 @@ class Handler(object):
         self.scene.repaint()
 
     def mouseClicked(self, btn, up, x, y):
+        if up and self._modeMouse == self.MODE_MOUSE_AROT:
+            for ent in self.scene.entities:
+                ent.geometry.saveRotation()
+
         self._modeMouse = self._modeMouse ^ self.modesMouse[btn]
         trace('set mouse mode to ' + bin(self._modeMouse))
 
         if not up:
+            # gets updated on mouseMove
             self._coords = (x, y)
+            # stays fixed on mouseMove
+            self._fixedCoords = (x, y)
 
     def mouseMove(self, *coords):
         camera = self.scene.camera
@@ -116,7 +124,24 @@ class Handler(object):
         #   arcball rotation
         #
         if self._modeMouse & self.MODE_MOUSE_AROT:
-            pass  # TODO
+            width, height = self.scene.camera.ratio
+            r = self.scene.camera.ratioref / 2.
+
+            def project_on_sphere(x, y, r):
+                x, y = x - width / 2., height / 2. - y
+                a = min(r ** 2, x ** 2 + y ** 2)
+                z = math.sqrt(r ** 2 - a)
+                l = math.sqrt(sum([q ** 2 for q in (x, y, z)]))
+                return [q / l for q in (x, y, z)]
+
+            start = project_on_sphere(*self._fixedCoords + (r, ))
+            move = project_on_sphere(x, y, r)
+            angle = math.acos(np.dot(start, move))
+            axis = np.cross(start, move)
+
+            for ent in self.scene.entities:
+                ent.geometry.angle = angle
+                ent.geometry.rotaxis = axis
 
         self._coords = coords
         self.scene.repaint()
@@ -140,9 +165,8 @@ class Handler(object):
                 return v
 
             def mapclr(clr):
-                log('mapping color %s' % str(clr))
                 clr = [sane(c + o) for c, o in zip(clr, offset)]
-                log('new color %s' % str(clr))
+                trace('setting new color %s' % str(clr))
                 return clr
 
             if self._modeColor == self.MODE_COLOR_BG:
@@ -196,8 +220,8 @@ class Entity(object):
         # save for plane
         gl.glPushMatrix()
 
-        # alter entities
-        gl.glRotate(self._gm.angle, 0., 1., 0.)
+        # arcball rotation
+        gl.glMultMatrixf(self.geometry.rotation)
 
         # normalize
         gl.glScale(*geometry.rawScale)
