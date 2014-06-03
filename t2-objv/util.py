@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 
+import math
 import logging
+import numpy as np
 
 
 """
@@ -100,6 +102,26 @@ class Color(list):
 
     def __init__(self):
         self += [0., 0., 0.]
+
+    def hsla(self, h, s, l, a):
+        s, l, a = map(float, (s, l, a))
+        h = math.radians(h)
+        q = math.sqrt
+
+        p = np.array([
+            [q(2. / 3.) * s * math.cos(h)],
+            [q(2. / 3.) * s * math.sin(h)],
+            [(4. * l) / q(3)]
+        ])
+
+        T = np.array([
+            [   2. / q(6),           0., 1. / q(3)],
+            [-(1. / q(6)),    1. / q(2), 1. / q(3)],
+            [-(1. / q(6)), -(1. / q(2)), 1. / q(3)]
+        ])
+
+        rgba = np.append(T.dot(p).flatten(), a)
+        self.rgba(*rgba)
 
     def rgba(self, r, g, b, a):
         # r, g, b in [0, 255], a in [0, 1]
