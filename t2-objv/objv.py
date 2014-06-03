@@ -110,7 +110,7 @@ def main(argv):
     # alter appearance
     scene.background = util.Color().hex(0x33333300)
     light = scene.createLight()
-    light.position = 2., 2., 2.
+    light.position = 0.5, 2., 0.5
 
     # create camera
     cam = render.Camera.Instance()

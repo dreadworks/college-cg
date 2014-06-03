@@ -99,8 +99,11 @@ class Polyhedron(object):
             raise GeometryException(
                 'Angle and rotaxis must be set to use rotate')
 
-        s, c = math.sin(self.angle), math.cos(self.angle)
         l = np.linalg.norm(self.rotaxis)
+        if l == 0:
+            return self._lastRotmat
+
+        s, c = math.sin(self.angle), math.cos(self.angle)
         x, y, z = [q / l for q in self.rotaxis]
         mc = 1 - c
 

@@ -189,6 +189,9 @@ class Handler(object):
             cam = self.scene.camera
             cam.mode = cam.PROJECTIVE
 
+        if key == 'h':
+            self.scene.toggleShadow()
+
         self.scene.repaint()
 
 
@@ -202,35 +205,9 @@ class Entity(object):
         self._gm = geometry
         self.vbo = geometry.vbo
         self.material = Material()
+        self.shadow = 0., 0., 0., 0.
 
-    def render(self, camera):
-        geometry = self.geometry
-        trace('rendering entity %s at position %s' % (
-            geometry, geometry.position))
-
-        self.material.render()
-
-        # configure geometry
-        gl.glLoadIdentity()
-
-        # do rotation, zoom and translation
-        gl.glTranslate(*camera.translation)
-        gl.glTranslate(*geometry.position)
-
-        # save for plane
-        gl.glPushMatrix()
-
-        # arcball rotation
-        gl.glMultMatrixf(self.geometry.rotation)
-
-        # normalize
-        gl.glScale(*geometry.rawScale)
-        gl.glTranslate(*geometry.rawOffset)
-
-        # configure appearance
-        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, self.mode)
-
-        # render vertex/normal buffer
+    def _renderVertices(self):
         self.vbo.bind()
 
         # Data in the vbo is saved as follows:
@@ -246,6 +223,70 @@ class Entity(object):
 
         gl.glDrawArrays(gl.GL_TRIANGLES, 0, len(self.vbo.data))
         self.vbo.unbind()
+
+    def _renderShadow(self, light, geometry):
+        gl.glDisable(gl.GL_DEPTH_TEST)
+        gl.glDisable(gl.GL_LIGHTING)
+
+        x, y, z = light.position[1]
+        pj = 1. / -y
+
+        T = np.transpose([
+            [1., 0., 0., 0.],
+            [0., 1., 0., 0.],
+            [0., 0., 1., 0.],
+            [0., pj, 0., 0.]
+        ])
+
+        # move and scale according to the
+        # lights position
+        dist = np.linalg.norm((x, y, z))
+        gl.glTranslate(-x * dist, -1., -z * dist)
+        gl.glScale(*[dist for _ in range(3)])
+
+        # translate into center, project
+        # on the z/x-plane and move back
+        gl.glTranslate(x, y, z)
+        gl.glMultMatrixf(T)
+        gl.glTranslate(-x, -y, -z)
+
+        gl.glMultMatrixf(self.geometry.rotation)
+        gl.glScale(*geometry.rawScale)
+        gl.glTranslate(*geometry.rawOffset)
+
+        gl.glColor(*self.shadow)
+        self._renderVertices()
+
+        gl.glEnable(gl.GL_LIGHTING)
+        gl.glEnable(gl.GL_DEPTH_TEST)
+
+    # light as param is not so nice!
+    def render(self, camera, light=None):
+        geometry = self.geometry
+        trace('rendering entity %s at position %s' % (
+            geometry, geometry.position))
+
+        self.material.render()
+        gl.glLoadIdentity()
+
+        # do rotation, zoom and translation
+        gl.glTranslate(*camera.translation)
+        gl.glTranslate(*geometry.position)
+
+        gl.glPushMatrix()  # for plane
+
+        # render shadow
+        if light is not None:
+            gl.glPushMatrix()
+            self._renderShadow(light, geometry)
+            gl.glPopMatrix()
+
+        gl.glMultMatrixf(self.geometry.rotation)
+        gl.glScale(*geometry.rawScale)
+        gl.glTranslate(*geometry.rawOffset)
+
+        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, self.mode)
+        self._renderVertices()
 
     @property
     def mode(self):
@@ -266,6 +307,14 @@ class Entity(object):
     @material.setter
     def material(self, value):
         self._material = value
+
+    @property
+    def shadow(self):
+        return self._shadow
+
+    @shadow.setter
+    def shadow(self, value):
+        self._shadow = value
 
 
 class Light(object):
@@ -544,6 +593,7 @@ class Scene(object):
 
     def __init__(self):
         log('initializing scene')
+        self._shadow = False
         self._entities = []
         self._lights = []
 
@@ -605,6 +655,13 @@ class Scene(object):
     def entities(self):
         return self._entities
 
+    @property
+    def shadow(self):
+        return self._shadow
+
+    def toggleShadow(self):
+        self._shadow = False if self.shadow else True
+
     def addEntity(self, polyhedron):
         log('adding polyhedron "%s" to scene' % polyhedron)
         ent = Entity(polyhedron)
@@ -636,7 +693,8 @@ class Scene(object):
 
         # render all entities
         for ent in self._entities:
-            ent.render(self.camera)
+            shadow = self._lights[0] if self.shadow else None
+            ent.render(self.camera, shadow)
 
             # render floor under entity
             gl.glPopMatrix()
