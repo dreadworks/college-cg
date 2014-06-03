@@ -38,22 +38,39 @@ class RenderException(Exception):
 class Handler(object):
 
     # map binary masks to the different mouse buttons
-    MODE_ZOOM = 1 << 0  # zoom middle mouse button
-    MODE_MOVE = 1 << 1  # entity translation with right mouse button
-    MODE_AROT = 1 << 2  # arcball rotation with left mouse button
+    MODE_MOUSE_ZOOM = 1 << 0  # zoom middle mouse button
+    MODE_MOUSE_MOVE = 1 << 1  # entity translation with right mouse button
+    MODE_MOUSE_AROT = 1 << 2  # arcball rotation with left mouse button
 
     # map mutually exclusive coloring modes
-    MODE_CLR_BG = 0     # background coloring
-    MODE_CLR_ENT = 1    # entity coloring
+    MODE_COLOR_ADD = True  # either add or subtract color
+    MODE_COLOR_BG = 0      # background coloring
+    MODE_COLOR_ENT = 1     # entity coloring
 
     def __init__(self, scene):
-        self.modes = (
-            self.MODE_AROT,  # 0 => left mouse button
-            self.MODE_ZOOM,  # 1 => middle mouse button
-            self.MODE_MOVE)  # 2 => right mouse button
+        self.modesMouse = (
+            self.MODE_MOUSE_AROT,  # 0 => left mouse button
+            self.MODE_MOUSE_ZOOM,  # 1 => middle mouse button
+            self.MODE_MOUSE_MOVE)  # 2 => right mouse button
 
-        self._mode = 0       # initially no mouse button is pressed
-        self.scene = scene   # access to camera and entities
+        self._modeMouse = 0       # initially no mouse button is pressed
+        self._modeColor = self.MODE_COLOR_ENT
+        self.scene = scene         # access to camera and entities
+
+        # coloring offsets for
+        # color recalculations
+        o = 0.05
+        self.clroffset = {
+            's': (-o, -o, -o, 0),
+            'w': (o, o, o, 0),
+            'r': (o, 0, 0, 0),
+            'g': (0, o, 0, 0),
+            'b': (0, 0, o, 0)
+        }
+
+        # map k -> K with reversed effect
+        for k, v in self.clroffset.items():
+            self.clroffset[k.upper()] = map(lambda x: -1 * x, v)
 
     def reshape(self, width, height):
         trace('reshape called with %d, %d' % (width, height))
@@ -61,8 +78,8 @@ class Handler(object):
         self.scene.repaint()
 
     def mouseClicked(self, btn, up, x, y):
-        self._mode = self._mode ^ self.modes[btn]
-        trace('set mouse mode to ' + bin(self._mode))
+        self._modeMouse = self._modeMouse ^ self.modesMouse[btn]
+        trace('set mouse mode to ' + bin(self._modeMouse))
 
         if not up:
             self._coords = (x, y)
@@ -75,7 +92,7 @@ class Handler(object):
         #
         #   zoom in or out
         #
-        if self._mode & self.MODE_ZOOM:
+        if self._modeMouse & self.MODE_MOUSE_ZOOM:
             offset = camera.offset
             offset += dy / 100.
             camera.offset = offset
@@ -83,7 +100,7 @@ class Handler(object):
         #
         #   move object
         #
-        if self._mode & self.MODE_MOVE:
+        if self._modeMouse & self.MODE_MOUSE_MOVE:
             # the mouse movement must be translated
             # to the scene with regards to the zoom
             # and viewport ratio reference
@@ -98,13 +115,48 @@ class Handler(object):
         #
         #   arcball rotation
         #
-        if self._mode & self.MODE_AROT:
+        if self._modeMouse & self.MODE_MOUSE_AROT:
             pass  # TODO
 
         self._coords = coords
         self.scene.repaint()
 
     def keyPressed(self, key, x, y):
+        #
+        #   change colors
+        #
+        if key == 'q':
+            self._modeColor = self._modeColor ^ 1
+            log('changing background color mode to %d' % self._modeColor)
+
+        if key in self.clroffset.keys():
+            offset = self.clroffset[key]
+
+            def sane(v):
+                if v > 1:
+                    return 1
+                if v < 0:
+                    return 0
+                return v
+
+            def mapclr(clr):
+                log('mapping color %s' % str(clr))
+                clr = [sane(c + o) for c, o in zip(clr, offset)]
+                log('new color %s' % str(clr))
+                return clr
+
+            if self._modeColor == self.MODE_COLOR_BG:
+                self.scene.background = mapclr(self.scene.background)
+                print self.scene.background
+
+            if self._modeColor == self.MODE_COLOR_ENT:
+                for ent in self.scene.entities:
+                    ent.material.ambient = mapclr(ent.material.ambient[1])
+                    print ent.material.ambient
+
+        #
+        #   change perspective
+        #
         if key == 'o':
             cam = self.scene.camera
             cam.mode = cam.ORTHOGONALLY
@@ -132,7 +184,7 @@ class Entity(object):
         trace('rendering entity %s at position %s' % (
             geometry, geometry.position))
 
-        self.material.update()
+        self.material.render()
 
         # configure geometry
         gl.glLoadIdentity()
@@ -245,7 +297,7 @@ class Light(object):
     def specular(self, value):
         self._specular = gl.GL_SPECULAR, value
 
-    def update(self):
+    def render(self):
         gl.glLight(self._source, *self.position)
         gl.glLight(self._source, *self.ambient)
         gl.glLight(self._source, *self.diffuse)
@@ -313,7 +365,7 @@ class Material(object):
         # value in [0, 128]
         self._shininess = gl.GL_SHININESS, value
 
-    def update(self):
+    def render(self):
         f = self.face
         gl.glMaterial(f, *self.ambient)
         gl.glMaterial(f, *self.diffuse)
@@ -513,8 +565,8 @@ class Scene(object):
     def background(self):
         return self._background
 
-    def setBackground(self, value):
-        gl.glClearColor(*value)
+    @background.setter
+    def background(self, value):
         self._background = value
 
     @property
@@ -548,11 +600,12 @@ class Scene(object):
             gl.GL_COLOR_BUFFER_BIT |
             gl.GL_DEPTH_BUFFER_BIT)
 
+        gl.glClearColor(*self.background)
         gl.glMatrixMode(gl.GL_MODELVIEW)
 
         # render lights
         for light in self._lights:
-            light.update()
+            light.render()
 
         gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
         gl.glEnableClientState(gl.GL_NORMAL_ARRAY)

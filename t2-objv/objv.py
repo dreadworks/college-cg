@@ -101,14 +101,14 @@ def main(argv):
     #
     #   CREATE SCENE
     #
-    log('initializing glut:%s' % delim)
+    log('initializing scene:%s' % delim)
     scene = render.Scene.Instance()
     scene.setShading(args.shading)
     scene.callback = glt.glutSwapBuffers
     scene.repaint = glt.glutPostRedisplay
 
     # alter appearance
-    scene.setBackground(util.Color().hex(0x33333300))
+    scene.background = util.Color().hex(0x33333300)
     light = scene.createLight()
     light.position = 2., 2., 2.
 
@@ -147,10 +147,10 @@ def main(argv):
     glt.glutReshapeFunc(scene.evt.reshape)
 
     # bind rendering loop handler
-    glt.glutDisplayFunc(scene.render)
     # glt.glutIdleFunc(rotate)
 
     # dispatch
+    glt.glutDisplayFunc(scene.render)
     glt.glutMainLoop()
 
 
