@@ -132,7 +132,7 @@ def main(argv):
     #
     trace('listening:%s' % delim)
     glt.glutMouseFunc(scene.evt.mouseClicked)
-    glt.glutMotionFunc(scene.evt.mouseMove)
+    glt.glutMotionFunc(scene.evt.mouseMoved)
     glt.glutKeyboardFunc(scene.evt.keyPressed)
     glt.glutReshapeFunc(scene.evt.reshape)
 

@@ -63,12 +63,12 @@ class Polyhedron(object):
         self._faces = obj.faces
         self._rawOffset = offset
         self._rawScale = scale
-        self._lastRotmat = np.identity(4)
 
         # defaults
         self.angle = 0
         self.rotaxis = 0., 1., 0.
         self.position = 0., 0., 0.
+        self._lastRotmat = np.identity(4)
 
         log("loaded %d faces" % len(self.faces))
 
@@ -107,7 +107,7 @@ class Polyhedron(object):
         r = np.matrix([
             [(x * x * mc + c), (x * y * mc - z * s), (x * z * mc + y * s), 0],
             [(x * y * mc + z * s), (y * y * mc + c), (y * z * mc - x * s), 0],
-            [(x * z * mc + y * s), (y * z * mc + x * s), (z * z * mc + c), 0],
+            [(x * z * mc - y * s), (y * z * mc + x * s), (z * z * mc + c), 0],
             [0, 0, 0, 1]])
 
         # column major for OpenGL
@@ -115,6 +115,7 @@ class Polyhedron(object):
 
     def saveRotation(self):
         self._lastRotmat = self.rotation
+        self.angle = 0
 
     #
     #   CONFIGURABLE PROPERTIES

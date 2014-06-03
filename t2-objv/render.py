@@ -48,6 +48,18 @@ class Handler(object):
     MODE_COLOR_BG = 0      # background coloring
     MODE_COLOR_ENT = 1     # entity coloring
 
+    # helper function for arcball rotation
+    # maps x, y coordinates unto a sphere
+    def _projectOnSphere(self, x, y):
+        width, height = self.scene.camera.ratio
+        r = self.scene.camera.ratioref / 2.
+        x, y = x - width / 2., height / 2. - y
+
+        a = min(r ** 2, x ** 2 + y ** 2)
+        z = math.sqrt(r ** 2 - a)
+        l = math.sqrt(sum([q ** 2 for q in (x, y, z)]))
+        return [q / l for q in (x, y, z)]
+
     def __init__(self, scene):
         self.modesMouse = (
             self.MODE_MOUSE_AROT,  # 0 => left mouse button
@@ -89,12 +101,12 @@ class Handler(object):
         if not up:
             # gets updated on mouseMove
             self._coords = (x, y)
-            # stays fixed on mouseMove
-            self._fixedCoords = (x, y)
+            self._arotStart = self._projectOnSphere(x, y)
 
-    def mouseMove(self, *coords):
+    def mouseMoved(self, *coords):
         camera = self.scene.camera
         dx, dy = [x - y for x, y in zip(coords, self._coords)]
+        x, y = coords
         trace('mouseMove (%d, %d), offset (%d, %d)' % (x, y, dx, dy))
 
         #
@@ -124,18 +136,8 @@ class Handler(object):
         #   arcball rotation
         #
         if self._modeMouse & self.MODE_MOUSE_AROT:
-            width, height = self.scene.camera.ratio
-            r = self.scene.camera.ratioref / 2.
-
-            def project_on_sphere(x, y, r):
-                x, y = x - width / 2., height / 2. - y
-                a = min(r ** 2, x ** 2 + y ** 2)
-                z = math.sqrt(r ** 2 - a)
-                l = math.sqrt(sum([q ** 2 for q in (x, y, z)]))
-                return [q / l for q in (x, y, z)]
-
-            start = project_on_sphere(*self._fixedCoords + (r, ))
-            move = project_on_sphere(x, y, r)
+            start = self._arotStart
+            move = self._projectOnSphere(x, y)
             angle = math.acos(np.dot(start, move))
             axis = np.cross(start, move)
 
@@ -171,12 +173,10 @@ class Handler(object):
 
             if self._modeColor == self.MODE_COLOR_BG:
                 self.scene.background = mapclr(self.scene.background)
-                print self.scene.background
 
             if self._modeColor == self.MODE_COLOR_ENT:
                 for ent in self.scene.entities:
                     ent.material.ambient = mapclr(ent.material.ambient[1])
-                    print ent.material.ambient
 
         #
         #   change perspective
