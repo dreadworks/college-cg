@@ -33,14 +33,30 @@ class GeometryException(Exception):
 
 
 class Polyhedron(object):
+    """
+
+    A polyhedron is a mesh of triangles.
+    It is easily renderable by OpenGL as it saves
+    its data into an vertex buffer object.
+
+    """
 
     def __str__(self):
         return self._name
 
     def __init__(self, obj):
+        """
+        Create a new Polyhedron. The obj must
+        provide a name, vertices, normals and
+        faces as raw data.
+
+        :param obj: Geometrical and topological data
+        :returns: self
+        :rtype: geometry.Polyhedron
+
+        """
         log("loading data from %s into Polyhedron" % obj.name())
         self._name = obj.name()
-        # faces = np.array([f for f in obj.faces()], 'f')
 
         # calculate raw object offset
         bbx = np.vstack((
@@ -77,22 +93,68 @@ class Polyhedron(object):
     #
     @property
     def vbo(self):
+        """
+        Vertex Buffer Object for OpenGL.
+        Data is saved as repeated v, vn pairs.
+
+        :returns: The vbo
+        :rtype: OpenGL.arrays.vbo.VBO
+
+        """
         return vbo.VBO(self.faces.flatten())
 
     @property
     def faces(self):
+        """
+        Returns a list of (v, vn) tuples where
+        v is a vertex and vn the surface normal
+        at that vertex.
+
+        :returns: The objects faces
+        :rtype: list
+
+        """
         return self._faces
 
     @property
     def rawScale(self):
+        """
+        Describes the scale factor that is
+        needed to scale the objects bounding
+        box so that it has an edge length of 2.
+
+        :returns: The normalization scale factor.
+        :rtype: float
+
+        """
         return self._rawScale
 
     @property
     def rawOffset(self):
+        """
+        Describes the offset of the bounding
+        box' center from the center of "the"
+        world coordinate systems origin.
+
+        :returns: Offset from the origin
+        :rtype: iterable
+        """
+        
         return self._rawOffset
 
     @property
     def rotation(self):
+        """
+        Returns a 4x4 Matrix in column major
+        form describing the rotation of the
+        object based on its angle and rotation
+        axis.
+
+        :returns: The rotation matrix
+        :rtype: numpy.matlib.matrix
+
+        """
+
         try:
             self.angle, self.rotaxis
         except:
@@ -117,6 +179,15 @@ class Polyhedron(object):
         return self._lastRotmat * r.transpose()
 
     def saveRotation(self):
+        """
+        Saves the current rotation matrix for
+        future transformations.
+
+        :returns: None
+        :rtype: None
+
+        """
+
         self._lastRotmat = self.rotation
         self.angle = 0
 
@@ -125,24 +196,75 @@ class Polyhedron(object):
     #
     @property
     def angle(self):
+        """
+        Returns the current angle.
+
+        :returns: The rotation angle
+        :rtype: float
+
+        """
         return self._angle
 
     @angle.setter
     def angle(self, value):
+        """
+        Set the angle. The provided value
+        gets truncated by calculating the
+        modulus of 360. Setting this argument
+        is only useful in conjunction with
+        the rotaxis property.
+
+        :param value: Arbitrary number
+        :returns: None
+        :rtype: None
+
+        """
         self._angle = value % 360
 
     @property
     def rotaxis(self):
+        """
+        The rotation axis.
+
+        :returns: A three dimensional vector
+        :rtype: list
+
+        """
         return self._rotaxis
 
     @rotaxis.setter
     def rotaxis(self, value):
+        """
+        Set the rotation axis. Setting this
+        argument is only useful in conjunction
+        with the angle property.
+
+        :param value: Three dimensional vector
+        :returns: None
+        :rtype: None
+
+        """
         self._rotaxis = value
 
     @property
     def position(self):
+        """
+        The objects position.
+
+        :returns: Three dimensional point
+        :rtype: iterable
+
+        """
         return self._position
 
     @position.setter
     def position(self, position):
+        """
+        Set the objects position.
+
+        :param position: Three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._position = position

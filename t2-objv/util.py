@@ -9,7 +9,9 @@ import numpy as np
 
 """
 
-Utility Module.
+Utility Module. Holds various
+helper that wont fit into the
+other modules.
 
 """
 
@@ -18,6 +20,11 @@ Utility Module.
 #   LOGGING
 #
 class Log(object):
+    """
+
+    Wraps logging.getLogger instances for easy use.
+
+    """
 
     def __init__(self, name):
         logger = {}
@@ -39,10 +46,24 @@ class Log(object):
         self.out.trace = self.out.debug
 
     def setVerbose(self):
+        """
+        Set all Log.out.info messages visible.
+
+        :returns: None
+        :rtype: None
+
+        """
         self.out.setLevel(logging.INFO)
         self.out.info('logger mode set verbose')
 
     def setTrace(self):
+        """
+        Set all Log.out.trace messages visible
+
+        :returns: None
+        :rtype: None
+
+        """
         self.out.setLevel(logging.DEBUG)
         self.out.trace('logger mode set to trace mode')
 
@@ -96,14 +117,55 @@ class Singleton:
 #   COLOR
 #
 class Color(list):
+    """
+
+    Easy to use color definitions. Every
+    color instance is a list of four elements
+    whose elements range from 0 to 1. The elements
+    describe r, g, b and alpha of a color. Various
+    setter exist to transform arbitrary definitions
+    into this uniform format.
+
+    """
 
     def _clear(self):
+        """
+        Removes the current color definition
+
+        :returns: None
+        :rtype: None
+
+        """
         del self[0:len(self)]
 
     def __init__(self):
-        self += [0., 0., 0.]
+        """
+        Create a new color instance.
+        Standard color value of new instances
+        is [0, 0, 0, 0]
+
+        :returns: self
+        :rtype: util.Color
+
+        """
+        self += [0., 0., 0., 0.]
 
     def hsla(self, h, s, l, a):
+        """
+        Provide hue, saturation, lightness and
+        alpha and transform them into the unified
+        color format
+
+        :param h: Colors hue value [0, 360]
+        :param s: Saturation [0, 1]
+        :param l: Lightness [0, 1]
+        :param a: Opacity [0, 1]
+        :returns: self
+        :rtype: util.Color
+
+        """
+        self._clear()
+
         s, l, a = map(float, (s, l, a))
         h = math.radians(h)
         q = math.sqrt
@@ -122,9 +184,22 @@ class Color(list):
 
         rgba = np.append(T.dot(p).flatten(), a)
         self.rgba(*rgba)
+        return self
 
     def rgba(self, r, g, b, a):
-        # r, g, b in [0, 255], a in [0, 1]
+        """
+        Provide red, green, blue and alpha
+        color values and transform them into the
+        unified color format.
+
+        :param r: Red value [0, 255]
+        :param g: Green value [0, 255]
+        :param b: Blue value [0, 255]
+        :param a: Alpha value [0, 1]
+        :returns: self
+        :rtype: util.Color
+
+        """
         self._clear()
 
         rgb = r, g, b
@@ -135,6 +210,16 @@ class Color(list):
         return self
 
     def hex(self, code):
+        """
+        Provide a hexadecimal color code.
+        It's just a shortcut for rgba.
+        Format: 0xrrggbbaa; r, g, b, a in [0x0, 0xff]
+
+        :param code: Hexadecimal color value code
+        :returns: self
+        :rtype: util.Color
+
+        """
         self._clear()
 
         for offset in range(0, 32, 8):

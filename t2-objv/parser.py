@@ -46,6 +46,8 @@ class ParserException(Exception):
 #
 class ObjParser(object):
     """
+    Parses wavefront obj files.
+
     Currently supported:
       v, vn, f, s, o
 
@@ -55,11 +57,23 @@ class ObjParser(object):
     """
     class Obj(object):
         """
-
-        TODO docs
+        Parser for obj entity definitions. This
+        is the whole obj file with zero or one
+        "o" directives or the part of the obj
+        file denoted by "o <name>".
 
         """
+
         def _parse(self, line):
+            """
+            Takes a line and saves the data
+            found into the internal data structures.
+
+            :param line: One line of the obj file
+            :returns: None
+            :rtype: None
+
+            """
             dtype, data = re.split(r' ', line, maxsplit=1)
             data = data.strip()
 
@@ -161,6 +175,18 @@ class ObjParser(object):
             raise ParserException(msg % dtype)
 
         def _smooth(self, group):
+            """
+            Calculates a new normal for a vertex
+            based on all the surface normals on
+            that particular point. The provided
+            group determines the range of faces
+            where the smoothing has to be applied.
+
+            :param group: Tuple denoting the smoothing range
+            :returns: None
+            :rtype: None
+
+            """
             log('smoothing normals between %d and %d' % group)
 
             for i in range(*group):
@@ -186,6 +212,16 @@ class ObjParser(object):
                 self._faces[i] = self._faces[i][0], self._v2vn[v]
 
         def __init__(self, name, data):
+            """
+            Initialize the object parser and
+            parse the file provided.
+
+            :param name: Name of the object
+            :param data: List of strings with obj definitions
+            :returns: self
+            :rtype: parser.ObjParser.Obj
+
+            """
             self._name = name
 
             # used for an efficient calculation
@@ -254,14 +290,37 @@ class ObjParser(object):
         #
         # @property
         def name(self):
+            """
+            Returns the objects name
+
+            :returns: The name
+            :rtype: string
+
+            """
             return self._name
 
         @property
         def vertices(self):
+            """
+            Returns a numpy array of vertex coordinates.
+
+            :returns: Vertex coordinates
+            :rtype: numpy.Array
+
+            """
             return np.array(self._vertices[1:], 'f')
 
         @property
         def faces(self):
+            """
+            Returns the faces as a numpy array consisting
+            of v, vn pairs, where v are vertex coordinates
+            and vn surface normal coordinates.
+
+            :returns: Geometrical description of faces
+            :rtype: numpy.Array
+
+            """
             v, vn = zip(*self._faces)
             v = map(lambda i: self._vertices[i], v)
             vn = map(lambda i: self._normals[i], vn)
@@ -273,6 +332,16 @@ class ObjParser(object):
     #
     #
     def __init__(self, fname):
+        """
+        Parses an wavefront obj file. For every
+        defined object an ObjParser.Obj object
+        is created.
+
+        :param fname: File name
+        :returns: self
+        :rtype: parser.ObjParser
+
+        """
         log('parsing %s' % fname)
 
         with open(fname) as f:
@@ -297,4 +366,11 @@ class ObjParser(object):
 
     @property
     def objects(self):
+        """
+        Return all parsed objects
+
+        :returns: Parsed objects
+        :rtype: List of parse.ObjParser.Obj objects
+
+        """
         return self._objects

@@ -24,6 +24,28 @@ Rendering Module.
 Handles OpenGL directives,
 initializes and changes the scene.
 
+render.Handler
+  Reacts on GUI-Events. Changes the state
+  of the scene or entities and requests
+  a repaint.
+
+render.Entity:
+  Wrapper for geometry. Handle geometry related
+  rendering and optional shadow creation.
+
+render.Material:
+  Entity material.
+
+render.Light:
+  Global scene lighting.
+
+render.Camera:
+  Viewport and zoom.
+
+render.Scene:
+  Rendering dispatcher. Maintains "global"
+  scene configuration.
+
 """
 
 
@@ -37,6 +59,13 @@ class RenderException(Exception):
 
 
 class Handler(object):
+    """
+
+    All handler for GUI-Events are handled within
+    this class. The scene and its entities are updated
+    accordingly and a repainting request is issued.
+
+    """
 
     # map binary masks to the different mouse buttons
     MODE_MOUSE_ZOOM = 1 << 0  # zoom middle mouse button
@@ -48,9 +77,21 @@ class Handler(object):
     MODE_COLOR_BG = 0      # background coloring
     MODE_COLOR_ENT = 1     # entity coloring
 
-    # helper function for arcball rotation
-    # maps x, y coordinates unto a sphere
     def _projectOnSphere(self, x, y):
+        """
+        Takes x, y viewport coordinates and
+        projects them (based on the viewport)
+        onto a sphere spanning the visible
+        area of the scene. Gets used to determine
+        axis and angle of the arcball rotation.
+
+        :param x: viewport x-coordinate
+        :param y: viewport y-coordinate
+        :returns: Three dimensional point
+        :rtype: list
+
+        """
+        
         width, height = self.scene.camera.ratio
         r = self.scene.camera.ratioref / 2.
         x, y = x - width / 2., height / 2. - y
@@ -61,6 +102,16 @@ class Handler(object):
         return [q / l for q in (x, y, z)]
 
     def __init__(self, scene):
+        """
+        Initializes the handler. Takes a scene
+        whose properties are changed upon registering
+        events.
+
+        :param scene: render.Scene instance
+        :returns: self
+        :rtype: render.Handler
+
+        """
         self.modesMouse = (
             self.MODE_MOUSE_AROT,  # 0 => left mouse button
             self.MODE_MOUSE_ZOOM,  # 1 => middle mouse button
@@ -86,11 +137,32 @@ class Handler(object):
             self.clroffset[k.upper()] = map(lambda x: -1 * x, v)
 
     def reshape(self, width, height):
+        """
+        Called when the viewport size changes.
+
+        :param width: New viewport width
+        :param height: New viewport height
+        :returns: None
+        :rtype: None
+
+        """
         trace('reshape called with %d, %d' % (width, height))
         self.scene.camera.ratio = width, height
         self.scene.repaint()
 
     def mouseClicked(self, btn, up, x, y):
+        """
+        Event fired when a mouse button gets
+        pressed or released.
+
+        :param btn: 0, 1, 2 as mapped by GLUT
+        :param up: 0 or 1 if pressed or released
+        :param x: Cursors x-coordinate
+        :param y: Cursors y-coordinate
+        :returns: None
+        :rtype: None
+
+        """
         if up and self._modeMouse == self.MODE_MOUSE_AROT:
             for ent in self.scene.entities:
                 ent.geometry.saveRotation()
@@ -104,9 +176,17 @@ class Handler(object):
             self._arotStart = self._projectOnSphere(x, y)
 
     def mouseMoved(self, *coords):
+        """
+        Called when a mouse button is pressed and
+        the cursor gets moved around.
+
+        :returns: None
+        :rtype: None
+
+        """
         camera = self.scene.camera
         dx, dy = [x - y for x, y in zip(coords, self._coords)]
-        x, y = coords
+        x, y = coords  # x and y leak into the function scope!
         trace('mouseMove (%d, %d), offset (%d, %d)' % (x, y, dx, dy))
 
         #
@@ -149,6 +229,16 @@ class Handler(object):
         self.scene.repaint()
 
     def keyPressed(self, key, x, y):
+        """
+        Called when a key gets pressed.
+
+        :param key: Key on the keyboard
+        :param x: Cursors x-coordinate
+        :param y: Cursors y-coordinate
+        :returns: None
+        :rtype: None
+
+        """
         #
         #   change colors
         #
@@ -199,8 +289,28 @@ class Handler(object):
 #   ENTITIES
 #
 class Entity(object):
+    """
+
+    Entities wrap objects from the geometry.py module.
+    They must provide a rendering method and carefully
+    maintain their MODELVIEW stack. Entities have Materials
+    to alter their appearance. Geometrical definitions like
+    rotation and translatation are defined in their geometry.
+    Entities render a shadow optionally.
+
+    """
 
     def __init__(self, geometry):
+        """
+        Create a new entity. A geometry.* instances
+        must be provided that maintains all geometrical
+        data and a vbo.
+
+        :param geometry: geometry.* instance
+        :returns: self
+        :rtype: render.Entity
+
+        """
         log('initializing entity')
         self._gm = geometry
         self.vbo = geometry.vbo
@@ -208,6 +318,14 @@ class Entity(object):
         self.shadow = 0., 0., 0., 0.
 
     def _renderVertices(self):
+        """
+        Takes the geometries vertex buffer
+        and issues the OpenGL drawing command.
+
+        :returns: None
+        :rtype: None
+
+        """
         self.vbo.bind()
 
         # Data in the vbo is saved as follows:
@@ -224,7 +342,18 @@ class Entity(object):
         gl.glDrawArrays(gl.GL_TRIANGLES, 0, len(self.vbo.data))
         self.vbo.unbind()
 
-    def _renderShadow(self, light, geometry):
+    def _renderShadow(self, light):
+        """
+        Transforms the object onto the x/z-plane
+        as the objects shadow.
+
+        :param light: Light source that defines the shadow
+        :returns: None
+        :rtype: None
+
+        """
+        geometry = self.geometry
+
         gl.glDisable(gl.GL_DEPTH_TEST)
         gl.glDisable(gl.GL_LIGHTING)
 
@@ -242,7 +371,6 @@ class Entity(object):
         # lights position
         dist = np.linalg.norm((x, y, z))
         gl.glTranslate(-x * dist, -1., -z * dist)
-        gl.glScale(*[dist for _ in range(3)])
 
         # translate into center, project
         # on the z/x-plane and move back
@@ -250,19 +378,33 @@ class Entity(object):
         gl.glMultMatrixf(T)
         gl.glTranslate(-x, -y, -z)
 
+        # rotate and normalize
         gl.glMultMatrixf(self.geometry.rotation)
         gl.glScale(*geometry.rawScale)
         gl.glTranslate(*geometry.rawOffset)
 
+        # set uniform color and render
+        # the projection
         gl.glColor(*self.shadow)
         self._renderVertices()
 
+        # restore
         gl.glEnable(gl.GL_LIGHTING)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
-    # light as param is not so nice!
     def render(self, camera, light=None):
+        """
+        Main rendering method. Gets called
+        by the scene for every rendering cicle.
+
+        :param camera: render.Camera instance
+        :param light: optional render.Light instance
+        :returns: None
+        :rtype: None
+
+        """
         geometry = self.geometry
+
         trace('rendering entity %s at position %s' % (
             geometry, geometry.position))
 
@@ -290,34 +432,93 @@ class Entity(object):
 
     @property
     def mode(self):
+        """
+        The rendering mode.
+
+        :returns: OpenGL rendering mode
+        :rtype: gl.glPolygonMode parameter
+
+        """
         return self._mode
 
     @mode.setter
     def mode(self, value):
+        """
+        Set the rendering mode. The parameter
+        must be suitable for gl.glPolygonMode
+
+        :param value: gl.glPolygonMode
+        :returns: None
+        :rtype: None
+
+        """
         self._mode = value
 
     @property
     def geometry(self):
+        """
+        Returns the geometry for the entity.
+
+        :returns: The entities geometry
+        :rtype: geometry.*
+
+        """
         return self._gm
 
     @property
     def material(self):
+        """
+        Returns the entites material.
+
+        :returns: Material instance
+        :rtype: render.Material
+
+        """
         return self._material
 
     @material.setter
     def material(self, value):
+        """
+        Set the entities material.
+
+        :param value: render.Material instance
+        :returns: None
+        :rtype: None
+
+        """
         self._material = value
 
     @property
     def shadow(self):
+        """
+        Returns the objects shadow color.
+
+        :returns: 4 dimensional point
+        :rtype: list
+
+        """
         return self._shadow
 
     @shadow.setter
     def shadow(self, value):
+        """
+        Set the objects shadow color.
+
+        :param value: 4 dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._shadow = value
 
 
 class Light(object):
+    """
+
+    Wrapper class around gl.glLight. A maximum of
+    8 lights may be instanciated.
+
+    """
 
     _SOURCES = [
         gl.GL_LIGHT7, gl.GL_LIGHT6, gl.GL_LIGHT5,
@@ -325,6 +526,14 @@ class Light(object):
         gl.GL_LIGHT1, gl.GL_LIGHT0]
 
     def __init__(self):
+        """
+        Upon initialization one of gl.GL_LIGHT[0-8] gets used.
+        All properties are set to the OpenGL standard.
+
+        :returns: self
+        :rtype: render.Light
+
+        """
         try:
             self._source = self._SOURCES.pop()
             log('creating light %s' % self._source)
@@ -340,37 +549,105 @@ class Light(object):
 
     @property
     def position(self):
+        """
+        Get the lights position
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._position
 
     @position.setter
     def position(self, pos):
+        """
+        Set the lights position
+
+        :param pos: Three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._position = gl.GL_POSITION, pos
 
     @property
     def ambient(self):
+        """
+        Get the lights ambient share.
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._ambient
 
     @ambient.setter
     def ambient(self, value):
+        """
+        Set the lights ambient share.
+
+        :param value: Three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._ambient = gl.GL_AMBIENT, value
 
     @property
     def diffuse(self):
+        """
+        Get the lights diffuse share.
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._diffuse
 
     @diffuse.setter
     def diffuse(self, value):
+        """
+        Set the lights diffuse share.
+
+        :param value: Three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._diffuse = gl.GL_DIFFUSE, value
 
     @property
     def specular(self):
+        """
+        Get the lights specular share.
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._specular
 
     @specular.setter
     def specular(self, value):
+        """
+        Set the lights specular share.
+
+        :param value: Three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._specular = gl.GL_SPECULAR, value
 
     def render(self):
+        """
+        Gets called every rendering cicle. Updates
+        the light based on its properties.
+
+        :returns: None
+        :rtype: None
+
+        """
         gl.glLight(self._source, *self.position)
         gl.glLight(self._source, *self.ambient)
         gl.glLight(self._source, *self.diffuse)
@@ -379,9 +656,22 @@ class Light(object):
 
 
 class Material(object):
+    """
+
+    Wrapper class around gl.glMaterial.
+
+    """
 
     def __init__(self):
-        # set default values explicitly
+        """
+        Create a material for use by render.Entity.
+        Properties are set based on the OpenGL standards.
+
+        :returns: self
+        :rtype: render.Material
+
+        """
+
         self.face = gl.GL_FRONT_AND_BACK
         self.ambient = .2, .2, .2, 1.
         self.diffuse = .8, .8, .8, 1.
@@ -391,54 +681,154 @@ class Material(object):
 
     @property
     def face(self):
+        """
+        The face to render the material on.
+
+        :returns: OpenGL face directive
+        :rtype: OpenGL constant
+
+        """
         return self._face
 
     @face.setter
     def face(self, value):
+        """
+        Set the face to render the material on.
+        Accepts gl.GL_FRONT, gl.GL_BACK and
+        gl.GL_FRONT_AND_BACK (standard).
+
+        :param value: OpenGL face directive
+        :returns: None
+        :rtype: None
+
+        """
         self._face = value
 
     @property
     def ambient(self):
+        """
+        Get the materials ambient share.
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._ambient
 
     @ambient.setter
     def ambient(self, value):
+        """
+        Sets the materials ambient share.
+
+        :param value: A three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._ambient = gl.GL_AMBIENT, value
 
     @property
     def diffuse(self):
+        """
+        Get the materials diffuse share.
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._diffuse
 
     @diffuse.setter
     def diffuse(self, value):
+        """
+        Sets the materials ambient share.
+
+        :param value: A three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._diffuse = gl.GL_DIFFUSE, value
 
     @property
     def specular(self):
+        """
+        Get the materials specular share.
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._specular
 
     @specular.setter
     def specular(self, value):
+        """
+        Sets the materials specular share.
+
+        :param value: A three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._specular = gl.GL_SPECULAR, value
 
     @property
     def emission(self):
+        """
+        Get the materials emission share.
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._emission
 
     @emission.setter
     def emission(self, value):
+        """
+        Sets the materials emission share.
+
+        :param value: A three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._emission = gl.GL_EMISSION, value
 
     @property
     def shininess(self):
+        """
+        Get the materials shininess share.
+
+        :returns: OpenGL directive and a three dimensional point
+        :rtype: tuple
+
+        """
         return self._shininess
 
     @shininess.setter
     def shininess(self, value):
-        # value in [0, 128]
+        """
+        Sets the materials shininess share.
+        Accepts values in [0, 128]
+
+        :param value: A three dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._shininess = gl.GL_SHININESS, value
 
     def render(self):
+        """
+        Gets called upon every rendering cicle of the entity.
+        Updates the material properties in OpenGL.
+
+        :returns: None
+        :rtype: None
+
+        """
         f = self.face
         gl.glMaterial(f, *self.ambient)
         gl.glMaterial(f, *self.diffuse)
@@ -452,11 +842,27 @@ class Material(object):
 #
 @Singleton
 class Camera(list):
+    """
+
+    Maintains all viewport and zooming related configurations.
+    The camera mode can be set to be orthogonally or projective
+    respectively.
+
+    """
 
     ORTHOGONALLY = 0
     PROJECTIVE = 1
 
     def _reinitialize(self):
+        """
+        Helper function to reinitialize the
+        camera if a property got set. Checks
+        if all required properties are set first.
+
+        :returns: None
+        :rtype: None
+
+        """
         try:  # check necessary props are set
             self.offset = self.offset
             self.mode
@@ -479,6 +885,16 @@ class Camera(list):
         self.offset = self.offset
 
     def _setOrthogonally(self):
+        """
+        Set the camera mode orthogonally.
+        The z-axis gets effectively cut
+        and no peception of perspective
+        between multiple entities remains.
+
+        :returns: None
+        :rtype: None
+
+        """
         trace('set camera mode orthogonally')
 
         # apply scale by using the camera's offset
@@ -490,6 +906,16 @@ class Camera(list):
         self.translation = 0.
 
     def _setProjective(self):
+        """
+        Set the camera mode projective.
+        A perspective distortion is applied
+        and a three dimensional impression
+        originates.
+
+        :returns: None
+        :rtype: None
+
+        """
         trace('set camera mode projective (%f° field of view)' % self.fow)
 
         # apply scale later by translating
@@ -506,6 +932,13 @@ class Camera(list):
         self.translation = -dx * (self.offset / ratio) - 2.
 
     def __init__(self):
+        """
+        Initialize the camera singleton.
+
+        :returns: self
+        :rtype: render.Camera
+
+        """
         log('initializing camera')
         self._offset = 0.
 
@@ -514,10 +947,29 @@ class Camera(list):
     #
     @property
     def translation(self):
+        """
+        Translate objects "filmed" by the camera
+        based on the mode so that they stay inside
+        the frustum. Needed to apply the offset
+        when the camera mode is set projective.
+
+        :returns: Three dimensional point
+        :rtype: tuple
+
+        """
         return self._translation
 
     @translation.setter
     def translation(self, trans):
+        """
+        Set the z-component of the
+        translation vector.
+
+        :param trans: float describing the offset
+        :returns: None
+        :rtype: None
+
+        """
         self._translation = 0., 0., trans
 
     #
@@ -525,10 +977,29 @@ class Camera(list):
     #
     @property
     def offset(self):
+        """
+        Positive number denoting the offset
+        of the camera from the cameras' target.
+
+        :returns: The offset
+        :rtype: float
+
+        """
         return self._offset
 
     @offset.setter
     def offset(self, offset):
+        """
+        Set the offset of the camera from
+        the "filmed" target. The offset value
+        gets sanitized and converted to float
+        if necessary.
+
+        :param offset: Offset value
+        :returns: None
+        :rtype: None
+
+        """
         if self.mode == self.PROJECTIVE:
             minOffset = 0.
 
@@ -545,26 +1016,73 @@ class Camera(list):
 
     @property
     def fow(self):
+        """
+        Get the cameras field of view.
+
+        :returns: The field of view angle
+        :rtype: float
+
+        """
         return self._fow
 
     @fow.setter
     def fow(self, fow):
+        """
+        Set the field of view. Only has an
+        effect when the camera mode is set
+        projectively.
+
+        :param fow: Field of view angle
+        :returns: None
+        :rtype: None
+
+        """
         self._fow = float(fow)
 
     @property
     def ratio(self):
+        """
+        Get the viewport ratio.
+
+        :returns: The viewport ratio
+        :rtype: tuple
+
+        """
         return self._ratio
 
     @property
     def asprat(self):
+        """
+        Get the viewport aspect ratio.
+
+        :returns: The viewport aspect ratio
+        :rtype: float
+
+        """
         return self._asprat
 
     @property
     def ratioref(self):
+        """
+        Get min(*self.ratio)
+
+        :returns: The smaller viewport edge
+        :rtype: number
+
+        """
         return self._ratioref
 
     @ratio.setter
     def ratio(self, ratio):
+        """
+        Set the viewport width and height. Also calculates
+        asprat and ratioref.
+
+        :param ratio: A (width, height) tuple
+        :returns: None
+        :rtype: None
+
+        """
         gl.glViewport(0, 0, *ratio)
 
         self._ratio = ratio
@@ -577,10 +1095,28 @@ class Camera(list):
 
     @property
     def mode(self):
+        """
+        Get the current camera mode. The mode is one of
+        render.Camera.MODE_ORTHOGONALLY and
+        render.Camera.MODE_PROJECTIVE
+
+        :returns: 0 or 1
+        :rtype: number
+
+        """
         return self._mode
 
     @mode.setter
     def mode(self, mode):
+        """
+        Set the camera mode to render.Camera.MODE_ORTHOGONALLY
+        or render.Camera.MODE_PROJECTIVE
+
+        :param mode: 0 or 1
+        :returns: None
+        :rtype: None
+
+        """
         self._mode = mode
         self._reinitialize()
 
@@ -590,8 +1126,25 @@ class Camera(list):
 #
 @Singleton
 class Scene(object):
+    """
+
+    Foremost class is the Scene singleton.
+    The main rendering loop is defined therein.
+    The scene may be configured by various options
+    to alter the appearance of the rendered image.
+    The scene maintains a list of entities that
+    handle their rendering themselves.
+
+    """
 
     def __init__(self):
+        """
+        Initialize the scene singleton.
+
+        :returns: self
+        :rtype: render.Scene
+
+        """
         log('initializing scene')
         self._shadow = False
         self._entities = []
@@ -605,9 +1158,25 @@ class Scene(object):
 
     @property
     def shading(self):
+        """
+        Return the surface shader mode.
+
+        :returns: The shader model
+        :rtype: string
+
+        """
         return self._shading
 
     def setShading(self, value):
+        """
+        Set the shader model. Accepted values
+        are 'flat' and 'smooth'.
+
+        :param value: 'flat' or 'smooth'
+        :returns: None
+        :rtype: None
+
+        """
         log('setting scene shader to %s' % value)
         gl.glEnable(gl.GL_LIGHTING)
 
@@ -621,48 +1190,144 @@ class Scene(object):
 
     @property
     def repaint(self):
+        """
+        Repaint callback. Most likely
+        glutPostRedisplay
+
+        :returns: The repaint callback function
+        :rtype: function
+
+        """
         return self._repaint
 
     @repaint.setter
     def repaint(self, value):
+        """
+        Set the repaint callback function.
+        Most likely glutPostRedisplay
+
+        :param value: repaint callback
+        :returns: None
+        :rtype: None
+
+        """
         self._repaint = value
 
     @property
     def callback(self):
+        """
+        Return the callback.
+
+        :returns: The callback
+        :rtype: function
+
+        """
         return self._callback
 
     @callback.setter
     def callback(self, value):
+        """
+        Set the callback. This function
+        gets called after every rendering
+        cicle. Most likely glutSwapBuffers.
+
+        :param value: Callback function
+        :returns: None
+        :rtype: None
+
+        """
         self._callback = value
 
     @property
     def background(self):
+        """
+        Get the scenes background color
+
+        :returns: A four dimensional point
+        :rtype: list
+
+        """
         return self._background
 
     @background.setter
     def background(self, value):
+        """
+        Set the scenes background color.
+
+        :param value: A four dimensional point
+        :returns: None
+        :rtype: None
+
+        """
         self._background = value
 
     @property
     def camera(self):
+        """
+        Get the scenes camera.
+
+        :returns: The camera
+        :rtype: render.Camera
+
+        """
         return self._camera
 
     @camera.setter
     def camera(self, cam):
+        """
+        Set the scenes camera.
+
+        :param cam: The camera
+        :returns: None
+        :rtype: None
+
+        """
         self._camera = cam
 
     @property
     def entities(self):
+        """
+        Return all entities added to the scene.
+
+        :returns: Scene entities
+        :rtype: list
+
+        """
         return self._entities
 
     @property
     def shadow(self):
+        """
+        Return if the shadow is activated or not.
+
+        :returns: Shadow flag
+        :rtype: bool
+
+        """
         return self._shadow
 
     def toggleShadow(self):
+        """
+        Either activates or deactivates
+        entity shadows.
+
+        :returns: None
+        :rtype: None
+
+        """
         self._shadow = False if self.shadow else True
 
     def addEntity(self, polyhedron):
+        """
+        Add a geometry to the scene. It gets wrapped into
+        a render.Entity. The entities render
+        method gets invoked every rendering cicle.
+
+        :param polyhedron: A geometry.* instance
+        :returns: Entity that wraps the geometry
+        :rtype: render.Entity
+
+        """
         log('adding polyhedron "%s" to scene' % polyhedron)
         ent = Entity(polyhedron)
         ent.mode = gl.GL_LINE if self.shading == 'grid' else gl.GL_FILL
@@ -670,11 +1335,27 @@ class Scene(object):
         return ent
 
     def createLight(self):
+        """
+        Create and append a light to the scene.
+
+        :returns: The created light
+        :rtype: render.Light
+
+        """
         light = Light()
         self._lights.append(light)
         return light
 
     def render(self):
+        """
+        Main rendering dispatcher. Invokes the rendering
+        of all entities and lights. Also sets the shader model
+        etc. according to the properties.
+
+        :returns: None
+        :rtype: None
+
+        """
         trace('rendering scene')
 
         gl.glClear(

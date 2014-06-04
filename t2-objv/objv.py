@@ -18,14 +18,20 @@ log, trace = logger.out.info, logger.out.trace
 
 """
 
-Main Module, TODO docs
+This is the main application module. It handles
+the parsing of command line arguments and initializes
+all GLUT-related things. It operates as the dispatcher
+for GUI-Events and repaint cicles but the main program
+runs in render.py.
 
 """
 
 
 def parse_args():
     """
+
     Parse command line arguments.
+
     """
     argp = argparse.ArgumentParser(
         description="""
@@ -72,6 +78,15 @@ def parse_args():
 
 
 def main(argv):
+    """
+
+    Program entry point. This function blocks.
+
+    :param argv: sys.argv (or some mock)
+    :returns: None
+    :rtype: None
+
+    """
     delim = '\n' + '- ' * 40
     args = parse_args()
 
