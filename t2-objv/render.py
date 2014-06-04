@@ -91,7 +91,7 @@ class Handler(object):
         :rtype: list
 
         """
-        
+
         width, height = self.scene.camera.ratio
         r = self.scene.camera.ratioref / 2.
         x, y = x - width / 2., height / 2. - y
@@ -279,8 +279,23 @@ class Handler(object):
             cam = self.scene.camera
             cam.mode = cam.PROJECTIVE
 
+        #
+        #   toggle shadow
+        #
         if key == 'h':
             self.scene.toggleShadow()
+
+        #
+        #   change rendering mode
+        #
+        if key == 'j':
+            self.scene.setShading('grid')
+
+        if key == 'k':
+            self.scene.setShading('flat')
+
+        if key == 'l':
+            self.scene.setShading('smooth')
 
         self.scene.repaint()
 
@@ -420,7 +435,7 @@ class Entity(object):
         # render shadow
         if light is not None:
             gl.glPushMatrix()
-            self._renderShadow(light, geometry)
+            self._renderShadow(light)
             gl.glPopMatrix()
 
         gl.glMultMatrixf(self.geometry.rotation)
@@ -444,15 +459,16 @@ class Entity(object):
     @mode.setter
     def mode(self, value):
         """
-        Set the rendering mode. The parameter
-        must be suitable for gl.glPolygonMode
+        Set the rendering mode based on the
+        shade model. Values are valid according
+        to the scene.setShading parameter
 
-        :param value: gl.glPolygonMode
+        :param value: 'grid', 'flat' or 'smooth'
         :returns: None
         :rtype: None
 
         """
-        self._mode = value
+        self._mode = gl.GL_LINE if value == 'grid' else gl.GL_FILL
 
     @property
     def geometry(self):
@@ -1170,9 +1186,9 @@ class Scene(object):
     def setShading(self, value):
         """
         Set the shader model. Accepted values
-        are 'flat' and 'smooth'.
+        are 'grid', 'flat' and 'smooth'.
 
-        :param value: 'flat' or 'smooth'
+        :param value: 'grid', 'flat' or 'smooth'
         :returns: None
         :rtype: None
 
@@ -1185,6 +1201,9 @@ class Scene(object):
 
         if value == 'smooth':
             gl.glShadeModel(gl.GL_SMOOTH)
+
+        for ent in self.entities:
+            ent.mode = value
 
         self._shading = value
 
@@ -1330,7 +1349,7 @@ class Scene(object):
         """
         log('adding polyhedron "%s" to scene' % polyhedron)
         ent = Entity(polyhedron)
-        ent.mode = gl.GL_LINE if self.shading == 'grid' else gl.GL_FILL
+        ent.mode = self.shading
         self._entities.append(ent)
         return ent
 
