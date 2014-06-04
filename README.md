@@ -14,7 +14,7 @@ limit of two weeks to complete.
 
 * The second task focused on the basics of OpenGL. The (deprecated)
   fixed function rendering pipeline should be used to render
-  .obj files with VBO's and Phong Shading. Most parameters, like
+  .obj files with VBO's and different shading models. Most parameters, like
   colouring, viewing angle, zoom etc. must be adjustable at runtime.
   An extensive list of all options can be found in the projects
   readme.

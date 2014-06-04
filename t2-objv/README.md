@@ -45,7 +45,7 @@ When the object is rendered, the following interaction is possible:
 
 2. Using the keyboard:
    - Change the perspective by pressing o for orthogonally and
-     p for projective perspection.
+     p for projective perspective.
    - Colors can be changed by holding r, g, b, s, w and R, G, B, S, W
      to add or remove color components. When pressing q the mode gets
      changed to whether the object or scene background color gets changed.
