@@ -52,4 +52,4 @@ When the object is rendered, the following interaction is possible:
    - Pressing h toggles the rendering of an object shadow. The shadow
      is only visible when the perspective is set projective.
    - The shading model may be switched with j, k and l, where j is
-     'grid', k is 'grid' and l is 'smooth'
+     'grid', k is 'flat' and l is 'smooth'
