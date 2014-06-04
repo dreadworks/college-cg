@@ -29,7 +29,9 @@ Just call ./objv.py with the following options:
       --fow FOW             field of view for projective perspective
 
 
-For example: ./objv.py -v -r 800x600 data/bunny.obj
+For example:
+
+    ./objv.py -v -r 800x600 data/bunny.obj
 
 Options
 -------
@@ -46,7 +48,7 @@ When the object is rendered, the following interaction is possible:
      p for projective perspection.
    - Colors can be changed by holding r, g, b, s, w and R, G, B, S, W
 	 to add or remove color components. When pressing q the mode gets
-	 changed to whether the object background color gets changed.
+	 changed to whether the object or scene background color gets changed.
    - Pressing h toggles the rendering of an object shadow. The shadow
      is only visible when the perspective is set projective.
 
