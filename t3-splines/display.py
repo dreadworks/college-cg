@@ -28,7 +28,7 @@ class Window(object):
     def renderer(self, r):
 
         # create proxy function accessing
-        # the renderer method to do things
+        # the render method to do things
         # before and after every rendering step
         def proxy():
             r.render()
@@ -37,9 +37,20 @@ class Window(object):
         self._renderer = r
         r.addHandler(self)
 
-        glt.glutInitWindowSize(*r.dimension)
+        glt.glutInitWindowSize(r.dimension, r.dimension)
         glt.glutCreateWindow(self.name)
         glt.glutDisplayFunc(proxy)
+
+    @property
+    def handler(self):
+        return self._handler
+
+    @handler.setter
+    def handler(self, h):
+        self._handler = h
+
+        # mapping
+        glt.glutMouseFunc(h.onMouseClicked)
 
     def show(self):
         glt.glutMainLoop()

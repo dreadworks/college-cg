@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
+import numpy as np
 import OpenGL.GL as gl
 import OpenGL.GL.shaders as sh
 
@@ -20,8 +21,17 @@ class RenderException(Exception):
 
 class Shader(object):
 
+    def _getUniformPointer(self, name):
+        cache = self._varcache
+        if not name in cache:
+            pointer = gl.glGetUniformLocation(self.program, name)
+            cache[name] = pointer
+        else:
+            pointer = cache[name]
+        return pointer
+
     def __init__(self):
-        pass
+        self._varcache = {}
 
     @property
     def vertex(self):
@@ -70,6 +80,16 @@ class Shader(object):
 
         self._program = sh.compileProgram(*shader)
 
+    def sendUniformVector(self, name, val):
+        vecp = self._getUniformPointer(name)
+        setter = getattr(gl, 'glUniform%df' % len(val))
+        setter(vecp, val)
+
+    def sendUniformMatrix(self, name, val, dims):
+        matp = self._getUniformPointer(name)
+        setter = getattr(gl, 'glUniformMatrix%dfv' % dims)
+        setter(matp, 1, gl.GL_TRUE, val)
+
 
 class Renderer(object):
 
@@ -78,9 +98,32 @@ class Renderer(object):
             handle = getattr(handler, 'on' + name.capitalize())
             handle(*args, **kwargs)
 
+    def _mvpmat(self):
+        self._lastdimension = self.dimension
+
+        offset = self.dimension / 2.
+        mtrans = np.array([
+            [1, 0, 0, -offset],
+            [0, 1, 0, -offset],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]], 'f')
+
+        scale = 1. / offset
+        mscale = np.array([
+            [scale, 0, 0, 0],
+            [0, -scale, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]], 'f')
+
+        return np.dot(mscale, mtrans)
+
     def __init__(self):
         self._handler = []
         self._shader = Shader()
+
+        # indicates if the mvpmat
+        # must be recalculated
+        self._lastdimension = 0
 
     @property
     def shader(self):
@@ -105,16 +148,18 @@ class Renderer(object):
         self._emit('repaint')
 
     def render(self):
-        log.info('rendering')
+        log.trace('rendering %d points', self.vobj.size)
         vertices = self.vobj.vbo
 
         gl.glUseProgram(self.shader.program)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 
-        # TODO
-        # reinitialize the modelview matrix
-        # and pass them with the project matrix
-        # to the vertex shader
+        # //
+
+        if (self._lastdimension != self.dimension):
+            self.shader.sendUniformMatrix('mvpmat', self._mvpmat(), 4)
+
+        # //
 
         # set draw style
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
@@ -122,8 +167,9 @@ class Renderer(object):
 
         # render vertex buffer
         vertices.bind()
+        # gl.glVertexPointer(4, gl.GL_FLOAT, 16, vertices)
         gl.glVertexPointerf(vertices)
-        gl.glDrawArrays(gl.GL_TRIANGLES, 0, self.vobj.size)
+        gl.glDrawArrays(gl.GL_LINE_STRIP, 0, self.vobj.size)
         vertices.unbind()
 
         # reset state

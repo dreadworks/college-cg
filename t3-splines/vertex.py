@@ -27,24 +27,27 @@ class VertexObject(object):
         self._bufsize = nsize
 
         self._vbo = None
-        self._stack.resize((self._bufsize, 3))
+        self._stack.resize((self._bufsize, 2))
         self._vbo = vbo.VBO(self._stack)
 
     def __init__(self, bufsize):
+        log.info('initializing vertex object with buffer size %d', bufsize)
         self._bufstep = bufsize
         self._bufsize = bufsize
         self._head = 0
 
-        self._stack = np.zeros((bufsize, 3), 'f')
+        # self._stack = np.array([
+        #     [100, 100],
+        #     [400, 100],
+        #     [100, 400.]], 'f')
+        # self._head = 3
+
+        self._stack = np.zeros((bufsize, 2), 'f')
         self._vbo = vbo.VBO(self._stack)
 
     @property
     def vbo(self):
         return self._vbo
-
-    @vbo.setter
-    def vbo(self, value):
-        self._vbo = value
 
     @property
     def size(self):
@@ -59,17 +62,24 @@ class VertexObject(object):
         return self._offset
 
     def add(self, x, y):
+        log.info('adding %d, %d to vertex object', x, y)
+        x, y = map(float, (x, y))
+
         # prevent buffer overflow
-        if (self._head + 2 >= self._bufsize):
+        if (self._head + 1 >= self._bufsize):
             self._resizeBuffer(op.add)
 
-        self._stack[self._head] = [x, y, 0]
+        self._stack[self._head] = [x, y]
+        self._vbo.set_array(self._stack)
         self._head += 1
 
     def undo(self):
         if (self._head - 1 < 0):
             msg = 'The vertex object is already empty'
             raise VertexException(msg)
+
+        msg = 'removing %d, %d, %d from vertex object'
+        log.info(msg, *self._stack[self._head])
 
         self._head -= 1
         threshold = self._bufsize - self._bufstep
