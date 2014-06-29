@@ -7,7 +7,7 @@ import OpenGL.GLUT as glt
 
 class Window(object):
 
-    def __init__(self, name, size):
+    def __init__(self, name):
         self._name = name
 
         glt.glutInit()
@@ -28,18 +28,22 @@ class Window(object):
     def renderer(self, r):
 
         # create proxy function accessing
-        # the renderer via closure to be able
-        # to do things before and after every
-        # rendering step
+        # the renderer method to do things
+        # before and after every rendering step
         def proxy():
             r.render()
             glt.glutSwapBuffers()
 
         self._renderer = r
+        r.addHandler(self)
+
+        glt.glutInitWindowSize(*r.dimension)
+        glt.glutCreateWindow(self.name)
         glt.glutDisplayFunc(proxy)
 
     def show(self):
-        size = self.renderer.dimension
-        glt.glutInitWindowSize(*size)
-        glt.glutCreateWindow(self.name)
         glt.glutMainLoop()
+
+    # invoked by self.renderer
+    def onRepaint(self):
+        glt.glutPostRedisplay()

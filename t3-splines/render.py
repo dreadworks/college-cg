@@ -5,14 +5,14 @@
 import OpenGL.GL as gl
 import OpenGL.GL.shaders as sh
 
-import logging
-log = logging.getLogger('bezier')
+from util import LOG
+log = LOG.out
 
 
 class RenderException(Exception):
 
     def __str__(self):
-        return "RenderException: " + self._msg
+        return self._msg
 
     def __init__(self, msg):
         self._msg = msg
@@ -49,8 +49,10 @@ class Shader(object):
 
     @property
     def program(self):
-        if self._program is None:
-            msg = 'Program not available, you must compile first'
+        try:
+            self._program
+        except AttributeError:
+            msg = 'Program not available, you must compile the shaders first'
             raise RenderException(msg)
 
         return self._program
@@ -58,12 +60,12 @@ class Shader(object):
     def compile(self):
         log.info('compiling and linking shader programs')
 
-        if not sh.glUseProgram:
+        if not hasattr(gl, 'glUseProgram'):
             msg = 'Missing shader objects'
             raise RenderException(msg)
 
         shader = self.vertex, self.fragment
-        shader = [(open(s[0]).read(), s[1]) for s in shader]
+        shader = [(open(s[0], 'r').read(), s[1]) for s in shader]
         shader = [sh.compileShader(*s) for s in shader]
 
         self._program = sh.compileProgram(*shader)
@@ -71,7 +73,13 @@ class Shader(object):
 
 class Renderer(object):
 
+    def _emit(self, name, *args, **kwargs):
+        for handler in self._handler:
+            handle = getattr(handler, 'on' + name.capitalize())
+            handle(*args, **kwargs)
+
     def __init__(self):
+        self._handler = []
         self._shader = Shader()
 
     @property
@@ -90,7 +98,14 @@ class Renderer(object):
     def dimension(self, value):
         self._dimension = value
 
+    def addHandler(self, handler):
+        self._handler.append(handler)
+
+    def repaint(self):
+        self._emit('repaint')
+
     def render(self):
+        log.info('rendering')
         vertices = self.vobj.vbo
 
         gl.glUseProgram(self.shader.program)

@@ -6,14 +6,14 @@ import numpy as np
 import operator as op
 from OpenGL.arrays import vbo
 
-import logging
-log = logging.getLogger('bezier')
+from util import LOG
+log = LOG.out
 
 
 class VertexException():
 
     def __str__(self):
-        return 'VertexException: ' + self._msg
+        return self._msg
 
     def __init__(self, msg):
         self._msg = msg

@@ -5,9 +5,8 @@ import render
 import vertex
 import display
 
-import logging
 from util import LOG
-log = logging.getLogger('bezier')
+log = LOG.out
 
 
 # initial size of the vertex buffer
@@ -31,8 +30,6 @@ def main():
     log.info('creating renderer')
     renderer = render.Renderer()
     renderer.dimension = 500, 500
-    renderer.shader.vertex = 'shader/std.vert'
-    renderer.shader.fragment = 'shader/std.frag'
     renderer.vobj = vobj
 
     # create window
@@ -40,6 +37,12 @@ def main():
     window = display.Window('Bezier Splines')
     window.renderer = renderer
     window.handler = Handler()
+
+    # configure shader
+    renderer.shader.vertex = 'shader/std.vert'
+    renderer.shader.fragment = 'shader/std.frag'
+    renderer.shader.compile()
+
     window.show()
 
 

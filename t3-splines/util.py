@@ -42,6 +42,7 @@ class Log(object):
         log.addHandler(logger['stream'])
         self.out = log
         self.out.trace = self.out.debug
+        self.out.propagate = False
 
     def setVerbose(self):
         """
