@@ -7,7 +7,7 @@ Description
 
 This is a raytracer written in python to render
 arbitrary scenes. The scenes are defined as json files.
-The shading is based upon the Phong Reflection Model. 
+The shading is based on the Phong Reflection Model. 
 
 The geometry is completely written from scratch. All
 geometrical computations (like dot products on vectors)
@@ -18,7 +18,7 @@ simply use nosetests.
 Usage:
 ------
 
-./raytracer.py worlds/task.json
+    ./raytracer.py worlds/task.json
 
 
 
