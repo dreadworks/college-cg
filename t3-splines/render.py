@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import vertex
 
 import numpy as np
 import OpenGL.GL as gl
@@ -117,13 +118,52 @@ class Renderer(object):
 
         return np.dot(mscale, mtrans)
 
+    def _spline(self, points):
+        converge = []
+
+        def interpolate(points, t):
+            f = lambda c: c[0] + t * (c[1] - c[0])
+            l = [zip(c, c[1:]) for c in zip(*points)]
+            return zip(*[map(f, xs) for xs in l])
+
+        def rec(pts, d):
+            if d == 0:
+                converge.extend(pts)
+                return
+
+            columns = [pts]
+            while len(columns[-1]) > 1:
+                col = interpolate(columns[-1], 0.5)
+                columns.append(col)
+
+            rec([c[0] for c in columns], d - 1)
+            rec([c[-1] for c in columns], d - 1)
+
+        rec(points, self._rounds)
+        return converge
+
     def __init__(self):
         self._handler = []
+        self._vobjs = []
         self._shader = Shader()
+
+        # number of recursion steps when
+        # gpu interpolation is turned off
+        self._rounds = 4
 
         # indicates if the mvpmat
         # must be recalculated
         self._lastdimension = 0
+
+    @property
+    def ctrlPolygon(self):
+        return self._ctrlPolygon
+
+    @ctrlPolygon.setter
+    def ctrlPolygon(self, cpoly):
+        self._ctrlPolygon = cpoly
+        self._splines = vertex.VertexObject(512)
+        self._vobjs = [cpoly, self._splines]
 
     @property
     def shader(self):
@@ -138,8 +178,16 @@ class Renderer(object):
         return self._dimension
 
     @dimension.setter
-    def dimension(self, value):
-        self._dimension = value
+    def dimension(self, d):
+        self._dimension = d
+
+    @property
+    def useGPU(self):
+        return self._useGPU
+
+    @useGPU.setter
+    def useGPU(self, value):
+        self._useGPU = value
 
     def addHandler(self, handler):
         self._handler.append(handler)
@@ -148,29 +196,43 @@ class Renderer(object):
         self._emit('repaint')
 
     def render(self):
-        log.trace('rendering %d points', self.vobj.size)
-        vertices = self.vobj.vbo
+        log.trace('rendering %d vertex objects', len(self._vobjs))
 
         gl.glUseProgram(self.shader.program)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 
-        # //
-
+        #
+        #   recalculate dimension mapping
+        #
         if (self._lastdimension != self.dimension):
+            log.trace('recalulating model view matrix with %d', self.dimension)
             self.shader.sendUniformMatrix('mvpmat', self._mvpmat(), 4)
+            gl.glViewport(0, 0, self.dimension, self.dimension)
 
-        # //
+        #
+        #   interpolate new curve segments
+        #
+        pcount = self.ctrlPolygon.size
+        if not self.useGPU and pcount > 3 and (pcount - 1) % 3 == 0:
+            log.trace('building new curve segment')
+            cpoints = self.ctrlPolygon.get(4)
+            self._splines.addPoints(*self._spline(cpoints))
 
-        # set draw style
-        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+        #
+        #   send draw vertex buffers
+        #
         gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+        for vobj in self._vobjs:
+            log.trace('rendering %d vertices', vobj.size)
 
-        # render vertex buffer
-        vertices.bind()
-        # gl.glVertexPointer(4, gl.GL_FLOAT, 16, vertices)
-        gl.glVertexPointerf(vertices)
-        gl.glDrawArrays(gl.GL_LINE_STRIP, 0, self.vobj.size)
-        vertices.unbind()
+            vertices = vobj.vbo
+            gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+
+            vertices.bind()
+            gl.glVertexPointerf(vertices)
+            gl.glDrawArrays(gl.GL_LINE_STRIP, 0, vobj.size)
+            vertices.unbind()
 
         # reset state
         gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
+        gl.glFlush()

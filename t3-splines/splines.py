@@ -9,19 +9,21 @@ from util import LOG
 log = LOG.out
 
 
-# initial size of the vertex buffer
-# (real size = BUFSIZE * sizeof(float) * 3)
+# initial size of the vertex buffer for
+# the control polygon and (if necessary) the
+# interpolated bezier spline.
+# (real size = BUFSIZE * sizeof(float) * 2)
 BUFSIZE = 128
 
 
 class Handler(object):
 
-    def __init__(self, renderer):
-        self._renderer = renderer
+    def __init__(self, window):
+        self._window = window
 
     @property
-    def renderer(self):
-        return self._renderer
+    def window(self):
+        return self._window
 
     def onMouseClicked(self, btn, up, x, y):
         """
@@ -38,28 +40,35 @@ class Handler(object):
         """
         if not up:
             log.info('registered mouse click event on %d, %d', x, y)
-            vertices = self.renderer.vobj
-            vertices.add(x, y)
-            self.renderer.repaint()
+            vertices = self.window.renderer.ctrlPolygon
+            vertices.addPoint(x, y)
+            self.window.renderer.repaint()
+
+    def onReshape(self, width, height):
+        renderer = self.window.renderer
+        renderer.dimension = max(width, height)
+        self.window.reshape(renderer.dimension)
+        renderer.repaint()
 
 
 def main():
-    LOG.setVerbose()
+    LOG.setTrace()
 
     # initialize data object
-    vobj = vertex.VertexObject(BUFSIZE)
+    cpoly = vertex.VertexObject(BUFSIZE)
 
     # configure renderer
     log.info('creating renderer')
     renderer = render.Renderer()
+    renderer.ctrlPolygon = cpoly
+    renderer.useGPU = False
     renderer.dimension = 500
-    renderer.vobj = vobj
 
     # create window
     log.info('creating window')
     window = display.Window('Bezier Splines')
     window.renderer = renderer
-    window.handler = Handler(renderer)
+    window.handler = Handler(window)
 
     # configure shader
     renderer.shader.vertex = 'shader/std.vert'

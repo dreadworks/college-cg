@@ -8,6 +8,7 @@ import OpenGL.GLUT as glt
 class Window(object):
 
     def __init__(self, name):
+        self._lastsize = 0
         self._name = name
 
         glt.glutInit()
@@ -51,9 +52,15 @@ class Window(object):
 
         # mapping
         glt.glutMouseFunc(h.onMouseClicked)
+        glt.glutReshapeFunc(h.onReshape)
 
     def show(self):
         glt.glutMainLoop()
+
+    def reshape(self, size):
+        if (size != self._lastsize):
+            glt.glutReshapeWindow(size, size)
+            self._lastsize = size
 
     # invoked by self.renderer
     def onRepaint(self):
