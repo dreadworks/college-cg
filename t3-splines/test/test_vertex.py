@@ -19,23 +19,49 @@ class VertexTest(unittest.TestCase):
         o = self.vobj
 
         for p in zip(range(3), range(3)):
-            o.add(*p)
+            o.addPoint(*p)
         self.assertEquals(o.size, 3)
 
         o.undo()
         self.assertEquals(o.size, 2)
 
         o.undo()
-        o.add(1, 1)
+        o.addPoint(1, 1)
         o.undo()
         o.undo()
 
         self.assertEquals(o.size, 0)
 
+    def testPushCollection(self):
+        o = self.vobj
+
+        for i in range(1, 10):
+            coll = zip(range(i), range(i))
+            o.addPoints(*coll)
+
+        self.assertEquals(o.size, 45)  # 9 * 10 / 2
+
+        for _ in range(1, 10):
+            o.undo()
+
+        self.assertEquals(o.size, 0)
+
+    def testGet(self):
+        o = self.vobj
+
+        for p in zip(range(3), range(3)):
+            o.addPoint(*p)
+
+        items = o.get(2)
+        self.assertEquals(items[0], (2., 2.))
+        self.assertEquals(items[1], (1., 1.))
+
+        o.empty()
+
     def testBufferIncrease(self):
         o = self.vobj
         for p in zip(range(5), range(5)):
-            o.add(*p)
+            o.addPoint(*p)
 
         self.assertEquals(o.size, 5)
         self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 2)
@@ -47,10 +73,28 @@ class VertexTest(unittest.TestCase):
         o = self.vobj
 
         for _ in range(15):
-            o.add(0, 0)
+            o.addPoint(0, 0)
 
         for _ in range(15):
             o.undo()
 
         self.assertEquals(o.size, 0)
         self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE)
+
+    def testEmptyWithBufferDecrease(self):
+        o = self.vobj
+        for _ in range(VertexTest.BUFSIZE * 3 - 1):
+            o.addPoint(1, 1)
+
+        o.empty()
+        self.assertEquals(o.size, 0)
+        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE)
+
+    def testEmptyWithoutBufferDecrease(self):
+        o = self.vobj
+        for _ in range(VertexTest.BUFSIZE * 3 - 1):
+            o.addPoint(1, 1)
+
+        o.empty(False)
+        self.assertEquals(o.size, 0)
+        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 3)
