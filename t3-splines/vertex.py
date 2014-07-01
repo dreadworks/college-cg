@@ -21,10 +21,13 @@ class VertexException():
 
 class VertexObject(object):
 
-    def _add(self, *points):
-        self._offset = len(points)
+    OFFSET = 4
 
-        while (self._head + self._offset >= self._bufsize):
+    def _add(self, *points):
+        offset = len(points)
+        self._offset.append(offset)
+
+        while (self._head + offset >= self._bufsize):
             self._resizeBuffer(op.add)
 
         for point in points:
@@ -50,8 +53,9 @@ class VertexObject(object):
         log.info('initializing vertex object with buffer size %d', bufsize)
         self._bufstep = bufsize
         self._bufsize = bufsize
-        self._head = 0
+        self._head = VertexObject.OFFSET
 
+        self._offset = []  # stack for undo
         self._stack = np.zeros((bufsize, 2), 'f')
         self._vbo = vbo.VBO(self._stack)
 
@@ -61,20 +65,27 @@ class VertexObject(object):
 
     @property
     def size(self):
-        return self._head
+        return self._head - VertexObject.OFFSET
 
     @property
     def scale(self):
         return self._scale
 
     @property
-    def offset(self):
-        return self._offset
+    def color(self):
+        return self._color
+
+    @color.setter
+    def color(self, value):
+        self._color = value
+        for v, i in value, range(VertexObject.OFFSET):
+            self._stack[i] = v
 
     def get(self, amount):
         # combining the slices into one [] behaves
         # somewhat nasty...
-        return map(tuple, self._stack[:self.size][::-1][:amount])
+        stack = self._stack[VertexObject.OFFSET:self._head][::-1]
+        return map(tuple, stack[:amount])
 
     def addPoint(self, x, y):
         log.trace('adding %d, %d to vertex object', x, y)
@@ -85,20 +96,22 @@ class VertexObject(object):
         self._add(*coll)
 
     def undo(self):
-        if (self._head - 1 < 0):
+        try:
+            offset = self._offset.pop()
+        except IndexError:
             msg = 'The vertex object is already empty'
             raise VertexException(msg)
 
         msg = 'removing %d points from vertex object'
-        log.info(msg, self._offset)
+        log.info(msg, offset)
 
-        self._head -= self._offset
+        self._head -= offset
         threshold = self._bufsize - self._bufstep
         while (self._head < threshold):
             self._resizeBuffer(op.sub)
             threshold -= self._bufstep
 
     def empty(self, resizeBuffer=True):
-        self._head = 0
+        self._head = VertexObject.OFFSET
         if resizeBuffer:
             self._setBuffer(self._bufstep)

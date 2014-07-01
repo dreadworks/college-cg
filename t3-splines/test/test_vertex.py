@@ -6,7 +6,7 @@ import unittest
 
 class VertexTest(unittest.TestCase):
 
-    BUFSIZE = 4
+    BUFSIZE = vertex.VertexObject.OFFSET
 
     def setUp(self):
         self.vobj = vertex.VertexObject(VertexTest.BUFSIZE)
@@ -64,7 +64,7 @@ class VertexTest(unittest.TestCase):
             o.addPoint(*p)
 
         self.assertEquals(o.size, 5)
-        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 2)
+        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 3)
 
         for _ in range(5):
             o.undo()
@@ -79,7 +79,7 @@ class VertexTest(unittest.TestCase):
             o.undo()
 
         self.assertEquals(o.size, 0)
-        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE)
+        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 2)
 
     def testEmptyWithBufferDecrease(self):
         o = self.vobj
@@ -97,4 +97,4 @@ class VertexTest(unittest.TestCase):
 
         o.empty(False)
         self.assertEquals(o.size, 0)
-        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 3)
+        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 4)
