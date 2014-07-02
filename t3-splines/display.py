@@ -55,6 +55,12 @@ class Window(object):
         glt.glutReshapeFunc(h.onReshape)
         glt.glutKeyboardFunc(h.onKeyPress)
 
+        # create menu
+        glt.glutCreateMenu(h.onMenuClick)
+        for k, v in h.menuItems.items():
+            glt.glutAddMenuEntry(k, v)
+        glt.glutAttachMenu(glt.GLUT_RIGHT_BUTTON)
+
     def show(self):
         glt.glutMainLoop()
 

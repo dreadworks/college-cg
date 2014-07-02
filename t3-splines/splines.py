@@ -5,6 +5,7 @@ import render
 import vertex
 import display
 
+import json
 from util import LOG
 log = LOG.out
 
@@ -42,6 +43,19 @@ class Handler(object):
         rec(points, self._rounds)
         return converge[::-1]
 
+    def _addPoint(self, x, y):
+        renderer = self.window.renderer
+        vertices = renderer.cpoly
+
+        vertices.addPoint(x, y)
+
+        if not renderer.gpu:
+            pcount = vertices.size
+            if pcount > 3 and (pcount - 1) % 3 == 0:
+                log.trace('building new curve segment')
+                spline = self._spline(vertices.get(4))
+                renderer.splines.addPoints(*spline)
+
     def __init__(self, window):
         self._window = window
 
@@ -52,6 +66,13 @@ class Handler(object):
     @property
     def window(self):
         return self._window
+
+    @property
+    def menuItems(self):
+        return {
+            'open': 0,
+            'save': 1
+        }
 
     def onMouseClicked(self, btn, up, x, y):
         """
@@ -68,18 +89,7 @@ class Handler(object):
         """
         if not up:
             log.info('registered mouse click event on %d, %d', x, y)
-            renderer = self.window.renderer
-            vertices = renderer.cpoly
-
-            vertices.addPoint(x, y)
-
-            if not renderer.gpu:
-                pcount = vertices.size
-                if pcount > 3 and (pcount - 1) % 3 == 0:
-                    log.trace('building new curve segment')
-                    spline = self._spline(vertices.get(4))
-                    renderer.splines.addPoints(*spline)
-
+            self._addPoint(x, y)
             self.window.renderer.repaint()
 
     def onReshape(self, width, height):
@@ -112,6 +122,56 @@ class Handler(object):
             # thrown when vertices/splines .size == 0
             except vertex.VertexException:
                 pass
+
+    def onMenuClick(self, action):
+        if action not in self.menuItems.values():
+            return
+
+        actions = self.menuItems
+        renderer = self.window.renderer
+        location = 'test.json'
+
+        # these properties are automatically
+        # saved and retrieved from the renderer
+        mappedProperties = [
+            'dimension',
+            'cpolyColor',
+            'splineColor']
+
+        #
+        #   SAVE TO FILE
+        #
+        if action == actions['save']:
+            log.trace('saving to %s', location)
+            data = {}
+
+            data['cpoly'] = renderer.cpoly.all()
+            for prop in mappedProperties:
+                data[prop] = getattr(renderer, prop)
+
+            data = json.dumps(data, indent=4, separators=(',', ': '))
+            with open(location, 'w') as f:
+                f.write(data)
+
+        #
+        #   LOAD FROM FILE
+        #
+        if action == actions['open']:
+            log.trace('loading from %s', location)
+
+            with open(location, 'r') as f:
+                data = json.loads(f.read())
+
+            renderer.cpoly = vertex.VertexObject(BUFSIZE)
+            for p in data['cpoly'][::-1]:
+                self._addPoint(*p)
+
+            for prop in mappedProperties:
+                setattr(renderer, prop, data[prop])
+
+            renderer.repaint()
+
+        return 0
 
 
 def main():
