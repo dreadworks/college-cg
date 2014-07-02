@@ -90,8 +90,11 @@ class VertexObject(object):
     def get(self, amount):
         # combining the slices into one [] behaves
         # somewhat nasty...
-        stack = self._stack[VertexObject.OFFSET:self._head][::-1]
-        return map(tuple, stack[:amount])
+        return self.all()[:amount]
+
+    def all(self):
+        stack = self._stack[VertexObject.OFFSET:self._head]
+        return map(lambda t: tuple(map(float, t)), stack[::-1])
 
     def addPoint(self, x, y):
         log.trace('adding %d, %d to vertex object', x, y)

@@ -58,6 +58,21 @@ class VertexTest(unittest.TestCase):
 
         o.empty()
 
+    def testAll(self):
+        o = self.vobj
+
+        rounds = 20
+        for i in range(rounds):
+            o.addPoint(1, 1)
+
+        items = o.all()
+
+        self.assertEquals(len(items), rounds)
+        for i in range(rounds):
+            self.assertEquals(items[i], (1, 1))
+
+        o.empty()
+
     def testBufferIncrease(self):
         o = self.vobj
         c = 5
