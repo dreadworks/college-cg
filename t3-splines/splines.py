@@ -18,8 +18,36 @@ BUFSIZE = 128
 
 class Handler(object):
 
+    def _spline(self, points):
+        converge = []
+
+        def interpolate(points, t):
+            f = lambda c: c[0] + t * (c[1] - c[0])
+            l = [zip(c, c[1:]) for c in zip(*points)]
+            return zip(*[map(f, xs) for xs in l])
+
+        def rec(pts, d, right=False):
+            if d == 0:
+                converge.extend(pts)
+                return
+
+            columns = [pts]
+            while len(columns[-1]) > 1:
+                col = interpolate(columns[-1], 0.5)
+                columns.append(col)
+
+            rec([c[0] for c in columns], d - 1)
+            rec([c[-1] for c in columns][::-1], d - 1)
+
+        rec(points, self._rounds)
+        return converge[::-1]
+
     def __init__(self, window):
         self._window = window
+
+        # number of recursion steps when
+        # gpu interpolation is turned off
+        self._rounds = 6
 
     @property
     def window(self):
@@ -40,8 +68,18 @@ class Handler(object):
         """
         if not up:
             log.info('registered mouse click event on %d, %d', x, y)
-            vertices = self.window.renderer.cpoly
+            renderer = self.window.renderer
+            vertices = renderer.cpoly
+
             vertices.addPoint(x, y)
+
+            if not renderer.gpu:
+                pcount = vertices.size
+                if pcount > 3 and (pcount - 1) % 3 == 0:
+                    log.trace('building new curve segment')
+                    spline = self._spline(vertices.get(4))
+                    renderer.splines.addPoints(*spline)
+
             self.window.renderer.repaint()
 
     def onReshape(self, width, height):
@@ -49,6 +87,31 @@ class Handler(object):
         renderer.dimension = max(width, height)
         self.window.reshape(renderer.dimension)
         renderer.repaint()
+
+    def onKeyPress(self, key, x, y):
+        """
+        Called when a key gets pressed.
+
+        :param key: Key on the keyboard
+        :param x: Cursors x-coordinate
+        :param y: Cursors y-coordinate
+        :returns: None
+        :rtype: None
+
+        """
+        if key == 'd':
+            renderer = self.window.renderer
+            vertices = renderer.cpoly
+
+            try:
+                vertices.undo()
+                if vertices.size % 3 == 0:
+                    self.window.renderer.splines.undo()
+                renderer.repaint()
+
+            # thrown when vertices/splines .size == 0
+            except vertex.VertexException:
+                pass
 
 
 def main():

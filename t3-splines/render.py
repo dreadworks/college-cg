@@ -127,38 +127,10 @@ class Renderer(object):
 
         return np.dot(mscale, mtrans)
 
-    def _spline(self, points):
-        converge = []
-
-        def interpolate(points, t):
-            f = lambda c: c[0] + t * (c[1] - c[0])
-            l = [zip(c, c[1:]) for c in zip(*points)]
-            return zip(*[map(f, xs) for xs in l])
-
-        def rec(pts, d, right=False):
-            if d == 0:
-                converge.extend(pts)
-                return
-
-            columns = [pts]
-            while len(columns[-1]) > 1:
-                col = interpolate(columns[-1], 0.5)
-                columns.append(col)
-
-            rec([c[0] for c in columns], d - 1)
-            rec([c[-1] for c in columns][::-1], d - 1)
-
-        rec(points, self._rounds)
-        return converge[::-1]
-
     def __init__(self):
         self._handler = []
         self._vobjs = []
         self._shader = Shader()
-
-        # number of recursion steps when
-        # gpu interpolation is turned off
-        self._rounds = 6
 
         # indicates if the mvpmat
         # must be recalculated
@@ -173,6 +145,10 @@ class Renderer(object):
         self._cpoly = cpoly
         self._splines = vertex.VertexObject(512)
         self._vobjs = [cpoly, self._splines]
+
+    @property
+    def splines(self):
+        return self._splines
 
     @property
     def shader(self):
@@ -244,18 +220,6 @@ class Renderer(object):
             log.trace('recalulating model view matrix with %d', self.dimension)
             self.shader.sendUniformMatrix('mvpmat', self._mvpmat(), 4)
             gl.glViewport(0, 0, self.dimension, self.dimension)
-
-        #
-        #   interpolate new curve segments
-        #
-        if not self.gpu:
-            pcount = self.cpoly.size
-            if pcount > 3 and (pcount - 1) % 3 == 0:
-                log.trace('building new curve segment')
-                cpoints = self.cpoly.get(4)
-                spline = self._spline(cpoints)
-                self._splines.addPoints(*spline)
-                print spline[-5]
 
         #
         #   draw vertex buffers

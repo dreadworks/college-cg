@@ -53,6 +53,7 @@ class Window(object):
         # mapping
         glt.glutMouseFunc(h.onMouseClicked)
         glt.glutReshapeFunc(h.onReshape)
+        glt.glutKeyboardFunc(h.onKeyPress)
 
     def show(self):
         glt.glutMainLoop()
