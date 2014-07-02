@@ -87,14 +87,14 @@ class Shader(object):
 
         self._program = sh.compileProgram(*shader)
 
-    def sendUniformVector(self, name, val):
+    def sendUniformVector(self, name, val, dtype='f'):
         vecp = self._getUniformPointer(name)
-        setter = getattr(gl, 'glUniform%dfv' % len(val))
+        setter = getattr(gl, 'glUniform%d%sv' % (len(val), dtype))
         setter(vecp, 1, val)
 
-    def sendUniformMatrix(self, name, val, dims):
+    def sendUniformMatrix(self, name, val, dims, dtype='f'):
         matp = self._getUniformPointer(name)
-        setter = getattr(gl, 'glUniformMatrix%dfv' % dims)
+        setter = getattr(gl, 'glUniformMatrix%d%sv' % (dims, dtype))
         setter(matp, 1, gl.GL_TRUE, val)
 
     def getAttributePointer(self, name):
@@ -127,9 +127,56 @@ class Renderer(object):
 
         return np.dot(mscale, mtrans)
 
+    #
+    #   RENDER VBOS
+    #
+    def _render(self, vobj, draw):
+        log.trace('rendering %d vertices', vobj.size)
+
+        vertices = vobj.vbo
+        vpointer = self.shader.getAttributePointer('vertex')
+        vertices.bind()
+
+        # send vertices
+        gl.glEnableVertexAttribArray(vpointer)
+        gl.glVertexAttribPointer(
+            vpointer, 2, gl.GL_FLOAT, False, 0,
+            gl.GLvoidp(4 * vobj.vertexOffset))
+            # note: GL_FLOAT is defined to always
+            # be 32 bit (4 byte) in size
+
+        draw()
+
+        # send colors
+        self.shader.sendUniformVector('ucolor', vobj.color)
+        vertices.unbind()
+
+    def _renderCpoly(self):
+        size = self.cpoly.size
+        mode = gl.GL_LINE_STRIP
+        draw = lambda: gl.glDrawArrays(mode, 0, size)
+
+        self.shader.sendUniformVector('spline', [0], 'i')
+        self._render(self.cpoly, draw)
+
+    def _renderSplines(self):
+
+        def draw():
+            size = self.splines.size
+            mode = gl.GL_LINE_STRIP
+
+            if not self.gpu:
+                gl.glDrawArrays(mode, 0, size)
+
+            else:
+                for i in range((size - 1) / 3):
+                    gl.glDrawArrays(mode, i * 3, 4)
+
+        self.shader.sendUniformVector('spline', [1], 'i')
+        self._render(self.splines, draw)
+
     def __init__(self):
         self._handler = []
-        self._vobjs = []
         self._shader = Shader()
 
         # indicates if the mvpmat
@@ -144,7 +191,6 @@ class Renderer(object):
     def cpoly(self, cpoly):
         self._cpoly = cpoly
         self._splines = vertex.VertexObject(512)
-        self._vobjs = [cpoly, self._splines]
 
     @property
     def splines(self):
@@ -208,7 +254,7 @@ class Renderer(object):
         self._emit('repaint')
 
     def render(self):
-        log.trace('rendering %d vertex objects', len(self._vobjs))
+        log.trace('rendering vertex objects')
 
         gl.glUseProgram(self.shader.program)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT)
@@ -224,26 +270,9 @@ class Renderer(object):
         #
         #   draw vertex buffers
         #
-        for vobj in self._vobjs:
-            log.trace('rendering %d vertices', vobj.size)
-            gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
-
-            vertices = vobj.vbo
-            vpointer = self.shader.getAttributePointer('vertex')
-            vertices.bind()
-
-            # send vertices
-            gl.glEnableVertexAttribArray(vpointer)
-            gl.glVertexAttribPointer(
-                vpointer, 2, gl.GL_FLOAT, False, 0,
-                gl.GLvoidp(4 * vobj.vertexOffset))
-                # note: GL_FLOAT is defined to always
-                # be 32 bit (4 byte) in size
-            gl.glDrawArrays(gl.GL_LINE_STRIP, 0, vobj.size)
-
-            # send colors
-            self.shader.sendUniformVector('ucolor', vobj.color)
-            vertices.unbind()
+        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+        # self._renderCpoly()
+        self._renderSplines()
 
         # reset state
         gl.glFlush()

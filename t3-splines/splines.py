@@ -49,7 +49,10 @@ class Handler(object):
 
         vertices.addPoint(x, y)
 
-        if not renderer.gpu:
+        if renderer.gpu:
+            renderer.splines.addPoint(x, y)
+
+        else:
             pcount = vertices.size
             if pcount > 3 and (pcount - 1) % 3 == 0:
                 log.trace('building new curve segment')
@@ -182,7 +185,7 @@ def main():
     renderer = render.Renderer()
     renderer.cpoly = vertex.VertexObject(BUFSIZE)
     renderer.dimension = 500
-    renderer.gpu = False
+    renderer.gpu = True
 
     # create window
     log.info('creating window')

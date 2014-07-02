@@ -10,7 +10,8 @@ attribute vec4 vertex;
 
 varying vec4 color;
 
-void main(void) {
+void main(void)
+{
     color = ucolor;
     gl_Position = mvpmat * vertex;
 }
