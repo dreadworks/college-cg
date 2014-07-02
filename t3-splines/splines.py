@@ -129,7 +129,7 @@ class Handler(object):
 
         actions = self.menuItems
         renderer = self.window.renderer
-        location = 'test.json'
+        location = 'data/test.json'
 
         # these properties are automatically
         # saved and retrieved from the renderer
@@ -169,7 +169,7 @@ class Handler(object):
             for prop in mappedProperties:
                 setattr(renderer, prop, data[prop])
 
-            renderer.repaint()
+            self.window.reshape(renderer.dimension)
 
         return 0
 
@@ -194,10 +194,6 @@ def main():
     renderer.shader.vertex = 'shader/std.vert'
     renderer.shader.fragment = 'shader/std.frag'
     renderer.shader.compile()
-
-    # test
-    # renderer.cpoly.addPoints(
-    #    (400, 400), (400, 100), (100, 100), (100, 400))
 
     # appearance
     renderer.background = (.2, .2, .2, 0.)
