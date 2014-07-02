@@ -60,11 +60,15 @@ class VertexTest(unittest.TestCase):
 
     def testBufferIncrease(self):
         o = self.vobj
-        for p in zip(range(5), range(5)):
+        c = 5
+
+        for p in zip(range(c), range(c)):
             o.addPoint(*p)
 
         self.assertEquals(o.size, 5)
-        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 3)
+
+        amount = c / VertexTest.BUFSIZE + 2  # + 2 because ceil and offset
+        self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * amount)
 
         for _ in range(5):
             o.undo()
@@ -98,3 +102,11 @@ class VertexTest(unittest.TestCase):
         o.empty(False)
         self.assertEquals(o.size, 0)
         self.assertEquals(len(o.vbo.data), VertexTest.BUFSIZE * 4)
+
+    def testColor(self):
+        o = self.vobj
+
+        c = (1, 2, 3, 4)
+        o.color = c
+
+        self.assertEquals(o.color, c)

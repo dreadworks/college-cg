@@ -21,7 +21,8 @@ class VertexException():
 
 class VertexObject(object):
 
-    OFFSET = 4
+    OFFSET = 2
+    DIMENSIONS = 2
 
     def _add(self, *points):
         offset = len(points)
@@ -41,7 +42,7 @@ class VertexObject(object):
         self._bufsize = size
 
         self._vbo = None
-        self._stack.resize((self._bufsize, 2))
+        self._stack.resize((self._bufsize, VertexObject.DIMENSIONS))
         self._vbo = vbo.VBO(self._stack)
 
     def _resizeBuffer(self, mathop):
@@ -56,12 +57,16 @@ class VertexObject(object):
         self._head = VertexObject.OFFSET
 
         self._offset = []  # stack for undo
-        self._stack = np.zeros((bufsize, 2), 'f')
+        self._stack = np.zeros((bufsize, VertexObject.DIMENSIONS), 'f')
         self._vbo = vbo.VBO(self._stack)
 
     @property
     def vbo(self):
         return self._vbo
+
+    @property
+    def vertexOffset(self):
+        return VertexObject.OFFSET * VertexObject.DIMENSIONS
 
     @property
     def size(self):
@@ -73,13 +78,14 @@ class VertexObject(object):
 
     @property
     def color(self):
-        return self._color
+        rg, ba = self._stack[:VertexObject.OFFSET]
+        return rg[0], rg[1], ba[0], ba[1]
 
     @color.setter
     def color(self, value):
-        self._color = value
-        for v, i in value, range(VertexObject.OFFSET):
-            self._stack[i] = v
+        r, g, b, a = value
+        self._stack[0] = [r, g]
+        self._stack[1] = [b, a]
 
     def get(self, amount):
         # combining the slices into one [] behaves
