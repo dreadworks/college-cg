@@ -40,7 +40,7 @@ class Handler(object):
         """
         if not up:
             log.info('registered mouse click event on %d, %d', x, y)
-            vertices = self.window.renderer.ctrlPolygon
+            vertices = self.window.renderer.cpoly
             vertices.addPoint(x, y)
             self.window.renderer.repaint()
 
@@ -54,15 +54,12 @@ class Handler(object):
 def main():
     LOG.setTrace()
 
-    # initialize data object
-    cpoly = vertex.VertexObject(BUFSIZE)
-
     # configure renderer
     log.info('creating renderer')
     renderer = render.Renderer()
-    renderer.ctrlPolygon = cpoly
-    renderer.useGPU = False
+    renderer.cpoly = vertex.VertexObject(BUFSIZE)
     renderer.dimension = 500
+    renderer.gpu = False
 
     # create window
     log.info('creating window')
@@ -74,6 +71,15 @@ def main():
     renderer.shader.vertex = 'shader/std.vert'
     renderer.shader.fragment = 'shader/std.frag'
     renderer.shader.compile()
+
+    # test
+    # renderer.cpoly.addPoints(
+    #    (400, 400), (400, 100), (100, 100), (100, 400))
+
+    # appearance
+    renderer.background = (.2, .2, .2, 0.)
+    renderer.cpolyColor = (1., .6, 0., 0.)
+    renderer.splineColor = (0., .6, 1., 0.)
 
     window.show()
 

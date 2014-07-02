@@ -4,7 +4,13 @@
 
 
 uniform mat4 mvpmat;
+uniform vec4 ucolor;
+
+attribute vec4 vertex;
+
+varying vec4 color;
 
 void main(void) {
-    gl_Position = mvpmat * gl_Vertex;
+    color = ucolor;
+    gl_Position = mvpmat * vertex;
 }

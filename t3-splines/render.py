@@ -22,17 +22,23 @@ class RenderException(Exception):
 
 class Shader(object):
 
-    def _getUniformPointer(self, name):
-        cache = self._varcache
+    def _getPointer(self, name, cache, getter):
+        cache = self._cache[cache]
         if not name in cache:
-            pointer = gl.glGetUniformLocation(self.program, name)
+            pointer = getter(self.program, name)
             cache[name] = pointer
         else:
             pointer = cache[name]
         return pointer
 
+    def _getUniformPointer(self, name):
+        return self._getPointer(name, 'uniform', gl.glGetUniformLocation)
+
     def __init__(self):
-        self._varcache = {}
+        self._cache = {
+            'uniform': {},
+            'attribute': {}
+        }
 
     @property
     def vertex(self):
@@ -83,13 +89,16 @@ class Shader(object):
 
     def sendUniformVector(self, name, val):
         vecp = self._getUniformPointer(name)
-        setter = getattr(gl, 'glUniform%df' % len(val))
-        setter(vecp, val)
+        setter = getattr(gl, 'glUniform%dfv' % len(val))
+        setter(vecp, 1, val)
 
     def sendUniformMatrix(self, name, val, dims):
         matp = self._getUniformPointer(name)
         setter = getattr(gl, 'glUniformMatrix%dfv' % dims)
         setter(matp, 1, gl.GL_TRUE, val)
+
+    def getAttributePointer(self, name):
+        return self._getPointer(name, 'attribute', gl.glGetAttribLocation)
 
 
 class Renderer(object):
@@ -126,7 +135,7 @@ class Renderer(object):
             l = [zip(c, c[1:]) for c in zip(*points)]
             return zip(*[map(f, xs) for xs in l])
 
-        def rec(pts, d):
+        def rec(pts, d, right=False):
             if d == 0:
                 converge.extend(pts)
                 return
@@ -137,10 +146,10 @@ class Renderer(object):
                 columns.append(col)
 
             rec([c[0] for c in columns], d - 1)
-            rec([c[-1] for c in columns], d - 1)
+            rec([c[-1] for c in columns][::-1], d - 1)
 
         rec(points, self._rounds)
-        return converge
+        return converge[::-1]
 
     def __init__(self):
         self._handler = []
@@ -149,19 +158,19 @@ class Renderer(object):
 
         # number of recursion steps when
         # gpu interpolation is turned off
-        self._rounds = 4
+        self._rounds = 6
 
         # indicates if the mvpmat
         # must be recalculated
         self._lastdimension = 0
 
     @property
-    def ctrlPolygon(self):
-        return self._ctrlPolygon
+    def cpoly(self):
+        return self._cpoly
 
-    @ctrlPolygon.setter
-    def ctrlPolygon(self, cpoly):
-        self._ctrlPolygon = cpoly
+    @cpoly.setter
+    def cpoly(self, cpoly):
+        self._cpoly = cpoly
         self._splines = vertex.VertexObject(512)
         self._vobjs = [cpoly, self._splines]
 
@@ -182,12 +191,39 @@ class Renderer(object):
         self._dimension = d
 
     @property
-    def useGPU(self):
-        return self._useGPU
+    def background(self):
+        return self._background
 
-    @useGPU.setter
-    def useGPU(self, value):
-        self._useGPU = value
+    @background.setter
+    def background(self, value):
+        self._background = value
+        gl.glClearColor(*value)
+
+    @property
+    def cpolyColor(self):
+        return self._cpolyColor
+
+    @cpolyColor.setter
+    def cpolyColor(self, value):
+        self._cpolyColor = value
+        self._cpoly.color = value
+
+    @property
+    def splineColor(self):
+        return self._splineColor
+
+    @splineColor.setter
+    def splineColor(self, value):
+        self._splineColor = value
+        self._splines.color = value
+
+    @property
+    def gpu(self):
+        return self._gpu
+
+    @gpu.setter
+    def gpu(self, value):
+        self._gpu = value
 
     def addHandler(self, handler):
         self._handler.append(handler)
@@ -212,27 +248,38 @@ class Renderer(object):
         #
         #   interpolate new curve segments
         #
-        pcount = self.ctrlPolygon.size
-        if not self.useGPU and pcount > 3 and (pcount - 1) % 3 == 0:
-            log.trace('building new curve segment')
-            cpoints = self.ctrlPolygon.get(4)
-            self._splines.addPoints(*self._spline(cpoints))
+        if not self.gpu:
+            pcount = self.cpoly.size
+            if pcount > 3 and (pcount - 1) % 3 == 0:
+                log.trace('building new curve segment')
+                cpoints = self.cpoly.get(4)
+                spline = self._spline(cpoints)
+                self._splines.addPoints(*spline)
+                print spline[-5]
 
         #
-        #   send draw vertex buffers
+        #   draw vertex buffers
         #
-        gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
         for vobj in self._vobjs:
             log.trace('rendering %d vertices', vobj.size)
-
-            vertices = vobj.vbo
             gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
 
+            vertices = vobj.vbo
+            vpointer = self.shader.getAttributePointer('vertex')
             vertices.bind()
-            gl.glVertexPointerf(vertices)
+
+            # send vertices
+            gl.glEnableVertexAttribArray(vpointer)
+            gl.glVertexAttribPointer(
+                vpointer, 2, gl.GL_FLOAT, False, 0,
+                gl.GLvoidp(4 * vobj.vertexOffset))
+                # note: GL_FLOAT is defined to always
+                # be 32 bit (4 byte) in size
             gl.glDrawArrays(gl.GL_LINE_STRIP, 0, vobj.size)
+
+            # send colors
+            self.shader.sendUniformVector('ucolor', vobj.color)
             vertices.unbind()
 
         # reset state
-        gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
         gl.glFlush()
