@@ -139,7 +139,6 @@ class Polyhedron(object):
         :returns: Offset from the origin
         :rtype: iterable
         """
-        
         return self._rawOffset
 
     @property
