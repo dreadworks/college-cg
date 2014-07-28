@@ -7,6 +7,11 @@ import numpy as np
 import OpenGL.GL as gl
 import OpenGL.GL.shaders as sh
 
+# i have not been able to activate
+# the core profile on my machine...
+import OpenGL.GL.EXT.geometry_shader4 as extgs4
+
+
 from util import LOG
 log = LOG.out
 
@@ -22,13 +27,44 @@ class RenderException(Exception):
 
 class Shader(object):
 
-    def _getPointer(self, name, cache, getter):
-        cache = self._cache[cache]
+    def _link(self, shader, *shaderkeys):
+        prog = gl.glCreateProgram()
+        for name in shaderkeys:
+            gl.glAttachShader(prog, shader[name])
+
+        if 'geometry' in shaderkeys:
+            extgs4.glProgramParameteriEXT(
+                prog, extgs4.GL_GEOMETRY_INPUT_TYPE_EXT,
+                gl.GL_LINES_ADJACENCY)
+
+            extgs4.glProgramParameteriEXT(
+                prog, extgs4.GL_GEOMETRY_OUTPUT_TYPE_EXT,
+                gl.GL_LINE_STRIP)
+
+            extgs4.glProgramParameteriEXT(
+                prog, extgs4.GL_GEOMETRY_VERTICES_OUT_EXT,
+                200)
+
+        gl.glLinkProgram(prog)
+
+        log.info(
+            'linked program %s: %s',
+            shaderkeys,
+            gl.glGetProgramInfoLog(prog) or 'success')
+
+        return prog
+
+    def _getPointer(self, name, vtype, getter):
+        cache = self._cache[vtype]
+
         if not name in cache:
             pointer = getter(self.program, name)
             cache[name] = pointer
+
         else:
             pointer = cache[name]
+
+        log.trace('acquired %s pointer "%s": %s', vtype, name, pointer)
         return pointer
 
     def _getUniformPointer(self, name):
@@ -48,13 +84,13 @@ class Shader(object):
     def vertex(self, value):
         self._vertex = value, sh.GL_VERTEX_SHADER
 
-    # @property
-    # def geometry(self):
-    #     return self._geometry
+    @property
+    def geometry(self):
+        return self._geometry
 
-    # @geometry.setter
-    # def geometry(self, value):
-    #     self._geometry = value
+    @geometry.setter
+    def geometry(self, value):
+        self._geometry = value, extgs4.GL_GEOMETRY_SHADER_EXT
 
     @property
     def fragment(self):
@@ -66,13 +102,29 @@ class Shader(object):
 
     @property
     def program(self):
+        return self._program
+
+    @program.setter
+    def program(self, value):
+        self._program = value
+
+    @property
+    def stdProgram(self):
         try:
-            self._program
+            self._stdProgram
         except AttributeError:
             msg = 'Program not available, you must compile the shaders first'
             raise RenderException(msg)
 
-        return self._program
+        return self._stdProgram
+
+    @property
+    def bezierProgram(self):
+        return self._bezierProgram
+
+    @bezierProgram.setter
+    def bezierProgram(self, value):
+        self._bezierProgram = value
 
     def compile(self):
         log.info('compiling and linking shader programs')
@@ -81,16 +133,44 @@ class Shader(object):
             msg = 'Missing shader objects'
             raise RenderException(msg)
 
-        shader = self.vertex, self.fragment
-        shader = [(open(s[0], 'r').read(), s[1]) for s in shader]
-        shader = [sh.compileShader(*s) for s in shader]
+        # assemble raw configuration
+        shader = {
+            'vertex': self.vertex,
+            'geometry': self.geometry,
+            'fragment': self.fragment
+        }
 
-        self._program = sh.compileProgram(*shader)
+        # map configuration to shader objects
+        for name, conf in shader.items():
+            sfile, sprog = conf
+
+            sprog = gl.glCreateShader(sprog)
+            with open(sfile, 'r') as f:
+                sfile = f.read()
+
+            gl.glShaderSource(sprog, sfile)
+            gl.glCompileShader(sprog)
+
+            shader[name] = sprog
+            log.info('compiling %s shader: %s',
+                     name, gl.glGetShaderInfoLog(sprog) or 'success')
+
+        self._stdProgram = self._link(
+            shader, 'vertex', 'fragment')
+
+        self._bezierProgram = self._link(
+            shader, 'vertex', 'geometry', 'fragment')
+
+    def sendUniformValue(self, name, val, dtype='f'):
+        vp = self._getUniformPointer(name)
+        setter = getattr(gl, 'glUniform1%s' % dtype)
+        setter(vp, val)
 
     def sendUniformVector(self, name, val, dtype='f'):
+        dims = len(val)
         vecp = self._getUniformPointer(name)
-        setter = getattr(gl, 'glUniform%d%sv' % (len(val), dtype))
-        setter(vecp, 1, val)
+        setter = getattr(gl, 'glUniform%d%s' % (dims, dtype))
+        setter(vecp, *val)
 
     def sendUniformMatrix(self, name, val, dims, dtype='f'):
         matp = self._getUniformPointer(name)
@@ -116,23 +196,42 @@ class Renderer(object):
             [1, 0, 0, -offset],
             [0, 1, 0, -offset],
             [0, 0, 1, 0],
-            [0, 0, 0, 1]], 'f')
+            [0, 0, 0, 1]], dtype=np.float32)
 
         scale = 1. / offset
         mscale = np.array([
             [scale, 0, 0, 0],
             [0, -scale, 0, 0],
             [0, 0, 1, 0],
-            [0, 0, 0, 1]], 'f')
+            [0, 0, 0, 1]], dtype=np.float32)
 
         return np.dot(mscale, mtrans)
 
     #
     #   RENDER VBOS
     #
-    def _render(self, vobj, draw):
+    def _render(self, vobj, mode):
         log.trace('rendering %d vertices', vobj.size)
+        gl.glUseProgram(self.shader.program)
 
+        # send interpolation informations
+        if self.gpu and self.shader.program is self.shader.bezierProgram:
+            self.shader.sendUniformValue("interpolations", 4)
+
+        # send colors
+        self.shader.sendUniformVector('color', vobj.color)
+
+        #
+        #   recalculate model view projection matrix
+        #
+        if (self._lastdimension != self.dimension):
+            log.trace('recalulating model view matrix with %d', self.dimension)
+            self.shader.sendUniformMatrix('mvpmat', self._mvpmat(), 4)
+            gl.glViewport(0, 0, self.dimension, self.dimension)
+
+        #
+        #   set vertices
+        #
         vertices = vobj.vbo
         vpointer = self.shader.getAttributePointer('vertex')
         vertices.bind()
@@ -145,35 +244,8 @@ class Renderer(object):
             # note: GL_FLOAT is defined to always
             # be 32 bit (4 byte) in size
 
-        draw()
-
-        # send colors
-        self.shader.sendUniformVector('ucolor', vobj.color)
+        gl.glDrawArrays(mode, 0, vobj.size)
         vertices.unbind()
-
-    def _renderCpoly(self):
-        size = self.cpoly.size
-        mode = gl.GL_LINE_STRIP
-        draw = lambda: gl.glDrawArrays(mode, 0, size)
-
-        self.shader.sendUniformVector('spline', [0], 'i')
-        self._render(self.cpoly, draw)
-
-    def _renderSplines(self):
-
-        def draw():
-            size = self.splines.size
-            mode = gl.GL_LINE_STRIP
-
-            if not self.gpu:
-                gl.glDrawArrays(mode, 0, size)
-
-            else:
-                for i in range((size - 1) / 3):
-                    gl.glDrawArrays(mode, i * 3, 4)
-
-        self.shader.sendUniformVector('spline', [1], 'i')
-        self._render(self.splines, draw)
 
     def __init__(self):
         self._handler = []
@@ -255,24 +327,19 @@ class Renderer(object):
 
     def render(self):
         log.trace('rendering vertex objects')
-
-        gl.glUseProgram(self.shader.program)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT)
-
-        #
-        #   recalculate dimension mapping
-        #
-        if (self._lastdimension != self.dimension):
-            log.trace('recalulating model view matrix with %d', self.dimension)
-            self.shader.sendUniformMatrix('mvpmat', self._mvpmat(), 4)
-            gl.glViewport(0, 0, self.dimension, self.dimension)
-
-        #
-        #   draw vertex buffers
-        #
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
-        # self._renderCpoly()
-        self._renderSplines()
+
+        # control polygon
+        self.shader.program = self.shader.stdProgram
+        self._render(self.cpoly, gl.GL_LINE_STRIP)
+
+        # splines
+        if self.gpu:
+            self.shader.program = self.shader.bezierProgram
+            self._render(self.splines, gl.GL_LINE_STRIP_ADJACENCY)
+        else:
+            self._render(self.splines, gl.GL_LINE_STRIP)
 
         # reset state
         gl.glFlush()

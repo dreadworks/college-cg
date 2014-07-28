@@ -12,10 +12,9 @@ class Window(object):
         self._name = name
 
         glt.glutInit()
-        glt.glutInitDisplayMode(
-            glt.GLUT_DOUBLE |
-            glt.GLUT_RGBA |
-            glt.GLUT_DEPTH)
+        glt.glutInitDisplayString("rgba double")
+        # glt.glutInitContextVersion(3, 2)
+        # glt.glutInitContextProfile(glt.GLUT_CORE_PROFILE)
 
     @property
     def name(self):

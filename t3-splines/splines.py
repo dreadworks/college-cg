@@ -178,14 +178,14 @@ class Handler(object):
 
 
 def main():
-    LOG.setTrace()
+    LOG.setVerbose()
 
     # configure renderer
     log.info('creating renderer')
     renderer = render.Renderer()
     renderer.cpoly = vertex.VertexObject(BUFSIZE)
     renderer.dimension = 500
-    renderer.gpu = True
+    renderer.gpu = False
 
     # create window
     log.info('creating window')
@@ -195,6 +195,7 @@ def main():
 
     # configure shader
     renderer.shader.vertex = 'shader/std.vert'
+    renderer.shader.geometry = 'shader/bezier.geom'
     renderer.shader.fragment = 'shader/std.frag'
     renderer.shader.compile()
 
